@@ -155,9 +155,18 @@ function tireWalls(track: Track): InstancedMesh {
 
 export interface StartGantry {
   group: Group;
-  /** Acende as `count` primeiras luzes (0 a 5). */
-  setLights(count: number): void;
+  /**
+   * Acende as `count` primeiras luzes (0 a 5) em vermelho.
+   * @param go largada dada: as cinco ficam verdes
+   */
+  setLights(count: number, go?: boolean): void;
 }
+
+/** Cores do semáforo: lente apagada e luz acesa, em vermelho (espera) e verde (largada). */
+const LIGHT_RED_OFF = 0x2a0606;
+const LIGHT_RED = 0xff1a12;
+const LIGHT_GREEN_OFF = 0x062a0c;
+const LIGHT_GREEN = 0x1aff3c;
 
 /** Pórtico sobre a pista com o semáforo de 5 luzes voltado para o grid. */
 function startGantry(track: Track): StartGantry {
@@ -220,8 +229,8 @@ function startGantry(track: Track): StartGantry {
   const lens = new SphereGeometry(0.34, 24, 16).scale(1, 1, 0.35);
   for (let i = 0; i < 5; i++) {
     const material = new MeshStandardMaterial({
-      color: 0x2a0606,
-      emissive: 0xff1a12,
+      color: LIGHT_RED_OFF,
+      emissive: LIGHT_RED,
       emissiveIntensity: 0,
       roughness: 0.25,
     });
@@ -235,10 +244,12 @@ function startGantry(track: Track): StartGantry {
   group.add(structure, panel);
   return {
     group,
-    setLights(count) {
+    setLights(count, go = false) {
       lights.forEach((material, i) => {
+        material.color.setHex(go ? LIGHT_GREEN_OFF : LIGHT_RED_OFF);
+        material.emissive.setHex(go ? LIGHT_GREEN : LIGHT_RED);
         // Acima de 1 em HDR: é o que faz a luz acesa entrar no bloom.
-        material.emissiveIntensity = i < count ? 5 : 0;
+        material.emissiveIntensity = go || i < count ? 5 : 0;
       });
     },
   };

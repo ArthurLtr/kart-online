@@ -64,7 +64,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
     lights = -1;
     lastLap = null;
     view.resetCamera();
-    hud.say('Espere as luzes apagarem', 4, clock);
+    hud.say('Espere o sinal verde', 4, clock);
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -109,6 +109,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
     if (!before || !after) return;
 
     const lit = startLights(race);
+    const go = race.tick >= race.goTick;
     if (lit !== lights) {
       if (lit > lights && lights >= 0) audio.beep(false);
       if (lit === 0 && lights === RACE_RULES.lights) {
@@ -116,7 +117,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
         hud.say('Valendo!', 1.5, clock);
       }
       lights = lit;
-      view.setLights(lit);
+      view.setLights(lit, go);
     }
     if (after.jumpStart && !before.jumpStart) hud.say('Queimou a largada: +3 s', 4, clock);
     if (after.resets !== before.resets) {

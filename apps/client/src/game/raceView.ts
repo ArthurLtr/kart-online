@@ -145,8 +145,9 @@ export class RaceView {
     this.chase.reset();
   }
 
-  setLights(count: number): void {
-    this.trackScene.setStartLights(count);
+  /** Semáforo: `count` luzes vermelhas acesas; com `go` (largada dada), todas verdes. */
+  setLights(count: number, go = false): void {
+    this.trackScene.setStartLights(count, go);
   }
 
   /** A câmera volta a colar no kart (depois de reposicionar ou reiniciar). */

@@ -535,7 +535,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
           // Cada cliente confere de novo a pintura dos outros antes de desenhar.
           message.roster.map((entry) => sanitizePaint(paints[entry.slot] ?? null)),
         );
-        hud.say('Espere as luzes apagarem', 4, clock);
+        hud.say('Espere o sinal verde', 4, clock);
       }
       context.setStatus(`Corrida · ${message.roster.length} karts`);
     } else if (message.phase === 'results') {
@@ -566,6 +566,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     predictor.reconcile(own, message.ack, racing && !finished, neighbours());
 
     const lit = startLights(message);
+    const go = message.tick >= message.goTick;
     if (lit !== lights) {
       if (lit > lights && lights >= 0) audio.beep(false);
       if (lit === 0 && lights === RACE_RULES.lights) {
@@ -573,7 +574,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
         hud.say('Valendo!', 1.5, clock);
       }
       lights = lit;
-      view.setLights(lit);
+      view.setLights(lit, go);
     }
     const progress = message.progress[room.you];
     if (progress?.lastLapTicks != null && progress.lastLapTicks !== lastLapSeen) {

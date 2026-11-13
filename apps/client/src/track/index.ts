@@ -8,8 +8,8 @@ import { createWater } from './water';
 
 export interface TrackScene {
   group: Group;
-  /** Acende as `count` primeiras luzes do semáforo (0 a 5). */
-  setStartLights(count: number): void;
+  /** Acende as `count` primeiras luzes do semáforo (0 a 5); com `go`, todas ficam verdes. */
+  setStartLights(count: number, go?: boolean): void;
   /** Mostra os portais de checkpoint (depuração). */
   setCheckpointsVisible(visible: boolean): void;
   update(timeSeconds: number): void;
@@ -47,7 +47,7 @@ export function createTrackScene(
 
   return {
     group,
-    setStartLights: (count) => barriers.gantry.setLights(count),
+    setStartLights: (count, go) => barriers.gantry.setLights(count, go),
     setCheckpointsVisible: (visible) => {
       gates.visible = visible;
     },
