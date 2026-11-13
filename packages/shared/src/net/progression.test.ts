@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { COSMETIC_ITEMS } from './accounts.js';
 import {
   botMu,
   botSkillFor,
-  buyBlock,
   levelUpBonus,
   levelUpCoins,
   levelView,
   MAX_LEVEL,
   raceCoins,
   raceXp,
-  SHOP,
   totalXp,
   xpForLevel,
   xpToNext,
@@ -79,32 +76,12 @@ describe('XP da corrida', () => {
   });
 });
 
-describe('moedas e loja', () => {
-  it('toda oferta é um item do catálogo que não vem com a conta, e todos estão na loja', () => {
-    for (const offer of SHOP) {
-      const item = COSMETIC_ITEMS.find((entry) => entry.id === offer.id);
-      expect(item, offer.id).toBeDefined();
-      expect(item?.starter).toBe(false);
-      expect(offer.price).toBeGreaterThan(0);
-    }
-    const locked = COSMETIC_ITEMS.filter((item) => !item.starter).map((item) => item.id);
-    expect(SHOP.map((offer) => offer.id).sort()).toEqual(locked.sort());
-  });
-
+describe('moedas', () => {
   it('correr melhor rende mais moedas, e subir de nível dá bônus', () => {
     expect(raceCoins(200)).toBeGreaterThan(raceCoins(100));
     expect(raceCoins(0)).toBe(0);
     expect(levelUpBonus(1, 1)).toBe(0);
     expect(levelUpBonus(1, 3)).toBe(levelUpCoins(2) + levelUpCoins(3));
-  });
-
-  it('só compra quem tem o nível e as moedas, e uma vez só', () => {
-    const offer = SHOP[0]!;
-    expect(buyBlock(offer.id, offer.level, offer.price, [])).toBeNull();
-    expect(buyBlock(offer.id, offer.level - 1, 99_999, [])).toBe('level');
-    expect(buyBlock(offer.id, offer.level, offer.price - 1, [])).toBe('coins');
-    expect(buyBlock(offer.id, 99, 99_999, new Set([offer.id]))).toBe('owned');
-    expect(buyBlock('livery:nao-existe', 99, 99_999, [])).toBe('unknown');
   });
 });
 

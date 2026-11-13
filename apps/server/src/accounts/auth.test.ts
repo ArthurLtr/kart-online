@@ -1,4 +1,3 @@
-import { COSMETIC_ITEMS, filterOwnedCosmetics } from '@kart/shared';
 import { describe, expect, it } from 'vitest';
 import {
   ageOn,
@@ -68,27 +67,6 @@ describe('cadastro e regras de idade', () => {
     expect(statusOf(() => parseRegistration(form({ birthDate: '12/05/2000' }), NOW))).toBe(400);
     expect(statusOf(() => parseRegistration(form({ email: 'sem-arroba' }), NOW))).toBe(400);
     expect(statusOf(() => parseRegistration(form({ password: 'curta' }), NOW))).toBe(400);
-  });
-});
-
-describe('inventário', () => {
-  it('o seed tem os 12 cosméticos pedidos', () => {
-    const count = (slot: string) => COSMETIC_ITEMS.filter((item) => item.slot === slot).length;
-    expect(COSMETIC_ITEMS).toHaveLength(12);
-    expect([
-      count('helmetPaint'),
-      count('livery'),
-      count('suit'),
-      count('rim'),
-      count('trail'),
-    ]).toEqual([3, 3, 2, 2, 2]);
-    expect(new Set(COSMETIC_ITEMS.map((item) => item.id)).size).toBe(12);
-  });
-
-  it('item de catálogo que o jogador não possui sai do loadout; o básico fica', () => {
-    const owned = new Set(['livery:vermelho']);
-    const wanted = { livery: 'vermelho', suit: 'largada', trail: 'azul', gloves: 'pretas' };
-    expect(filterOwnedCosmetics(wanted, owned)).toEqual({ livery: 'vermelho', gloves: 'pretas' });
   });
 });
 

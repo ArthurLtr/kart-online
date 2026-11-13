@@ -6,6 +6,8 @@ import { section } from './wheelEditor';
 
 export interface PresetHost {
   presets(): readonly Preset[];
+  /** Quantos visuais a conta pode guardar (o espaço extra aumenta). */
+  limit(): number;
   /** Cores que resumem um visual, para a miniatura. */
   colors(preset: Preset): string[];
   /** O preset é igual ao que está no kart agora. */
@@ -52,11 +54,12 @@ export function createPresetEditor(host: PresetHost): CustomEditor {
 
   function sync(): void {
     const presets = host.presets();
-    const full = presets.length >= MAX_PRESETS;
+    const max = host.limit();
+    const full = presets.length >= max;
     name.disabled = saveButton.disabled = full;
     limit.textContent = full
-      ? `Limite de ${MAX_PRESETS} visuais. Remova ou substitua um para salvar outro.`
-      : `${presets.length} de ${MAX_PRESETS} usados.`;
+      ? `Limite de ${max} visuais. Remova ou substitua um para salvar outro${max < MAX_PRESETS ? ', ou compre o espaço extra na loja' : ''}.`
+      : `${presets.length} de ${max} usados.`;
     empty.hidden = presets.length > 0;
     list.replaceChildren(
       ...presets.map((preset, index) => {

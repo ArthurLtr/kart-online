@@ -122,6 +122,7 @@ export function createPaintEditor(host: PaintEditorHost): PaintEditor {
     const button = btn('', item.label, () =>
       edit((paint) => eachZone(paint, (id) => (paint.zones[id].finish = item.id))),
     );
+    button.dataset.item = `finish:${item.id}`;
     finishRow.append(button);
     return { id: item.id as FinishId, button };
   });
@@ -134,6 +135,7 @@ export function createPaintEditor(host: PaintEditorHost): PaintEditor {
       target = item.id === 'solid' ? 'zone' : 'pattern';
       edit((paint) => (paint.pattern.type = item.id));
     });
+    button.dataset.item = `pattern:${item.id}`;
     patternRow.append(button);
     return { id: item.id as PatternId, button };
   });

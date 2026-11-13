@@ -8,6 +8,8 @@ import { config } from './config.js';
 import { openDatabase } from './db/database.js';
 import { createApi } from './http/api.js';
 import type { MatchCreator, QueueStore } from './ranked/matchmaking.js';
+import { createPaymentProvider } from './payments/PaymentProvider.js';
+import { GemStore } from './payments/store.js';
 import { createQueueAudit } from './ranked/audit.js';
 import {
   averageSkill,
@@ -78,7 +80,12 @@ async function startServices(): Promise<Services | null> {
     matchmakers.casual.start(500);
     matchmakers.ranked.start();
     console.log(`[banco] pronto. ${season.name} até ${season.endsAt.toLocaleDateString('pt-BR')}`);
-    return { prisma, accounts, matchmakers, serverKey };
+    const provider = createPaymentProvider(config);
+    const store = new GemStore(prisma, provider, config.pixMinutes);
+    console.log(
+      `[loja] gemas por Pix: ${provider ? provider.name : 'desligada (sem MP_ACCESS_TOKEN)'}`,
+    );
+    return { prisma, accounts, store, matchmakers, serverKey };
   } catch (error) {
     console.error('[banco] indisponível: contas e Ranqueado desligados.', error);
     return null;

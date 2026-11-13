@@ -73,6 +73,7 @@ export function createWheelEditor(host: CustomHost): CustomEditor {
         paint.wheels.finish = item.id;
       }),
     );
+    button.dataset.item = `finish:${item.id}`;
     finishRow.append(button);
     return { id: item.id, button };
   });

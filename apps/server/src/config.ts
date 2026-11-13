@@ -25,6 +25,16 @@ export const config = {
   authSecret: env.AUTH_SECRET ?? 'kart-dev-nao-use-em-producao',
   /** Client ID do "Entrar com Google" (Google Cloud Console). Sem ele, só e-mail e senha. */
   googleClientId: env.GOOGLE_CLIENT_ID || undefined,
+  /**
+   * Mercado Pago (Pix): token de acesso da aplicação e segredo da assinatura
+   * dos webhooks. Sem o token, a loja de gemas fica desligada em produção.
+   */
+  mercadoPagoToken: env.MP_ACCESS_TOKEN || undefined,
+  mercadoPagoWebhookSecret: env.MP_WEBHOOK_SECRET || undefined,
+  /** Endereço público deste servidor, para o provedor avisar do pagamento (ex.: https://api.meujogo.com). */
+  publicApiUrl: env.PUBLIC_API_URL || undefined,
+  /** Minutos que um Pix fica válido. */
+  pixMinutes: number('PIX_MINUTES', 30),
   /** Chave das rotas de administração; sem ela, as rotas ficam desligadas. */
   adminKey: env.ADMIN_KEY,
   seasonName: env.SEASON_NAME ?? 'Temporada 1',

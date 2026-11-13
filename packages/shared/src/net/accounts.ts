@@ -2,57 +2,6 @@ import type { LevelView, QueueKind } from './progression.js';
 import type { Cosmetics, CustomPaint } from './protocol.js';
 import { sanitizeCosmetics, sanitizeCustomPaint } from './protocol.js';
 
-/** Cosmético que precisa estar no inventário para ser usado. */
-export interface CosmeticItemDef {
-  /** "slot:chave", igual ao id do banco. */
-  id: string;
-  slot: string;
-  key: string;
-  name: string;
-  /** Entregue a toda conta nova. */
-  starter: boolean;
-}
-
-const item = (slot: string, key: string, name: string, starter: boolean): CosmeticItemDef => ({
-  id: `${slot}:${key}`,
-  slot,
-  key,
-  name,
-  starter,
-});
-
-/**
- * Os 12 cosméticos do seed: 3 capacetes, 3 liveries, 2 macacões, 2 aros e
- * 2 trilhas. O que não está aqui (pintura original, luvas, botas, viseira…) é
- * básico e livre para todos.
- */
-export const COSMETIC_ITEMS: readonly CosmeticItemDef[] = [
-  item('helmetPaint', 'brisa', 'Capacete Brisa', true),
-  item('helmetPaint', 'crepusculo', 'Capacete Crepúsculo', true),
-  item('helmetPaint', 'bandeira', 'Capacete Bandeira', false),
-  item('livery', 'vermelho', 'Pintura vermelha', true),
-  item('livery', 'amarelo', 'Pintura amarela', false),
-  item('livery', 'verde', 'Pintura verde', false),
-  item('suit', 'mare', 'Macacão Maré', true),
-  item('suit', 'largada', 'Macacão Largada', false),
-  item('rim', 'grafite', 'Aros grafite', true),
-  item('rim', 'dourado', 'Aros dourados', false),
-  item('trail', 'branca', 'Trilha branca', true),
-  item('trail', 'azul', 'Trilha azul', false),
-];
-
-const ITEM_IDS = new Set(COSMETIC_ITEMS.map((entry) => entry.id));
-
-/** Tira do loadout os itens de catálogo que o jogador não possui. */
-export function filterOwnedCosmetics(cosmetics: Cosmetics, owned: ReadonlySet<string>): Cosmetics {
-  const result: Cosmetics = {};
-  for (const [slot, key] of Object.entries(cosmetics)) {
-    const id = `${slot}:${key}`;
-    if (!ITEM_IDS.has(id) || owned.has(id)) result[slot] = key;
-  }
-  return result;
-}
-
 /** Visual completo guardado com um nome, para trocar com um clique. */
 export interface PresetData {
   name: string;
@@ -129,8 +78,10 @@ export interface AccountView {
   name: string;
   guest: boolean;
   email: string | null;
-  /** Menor de 18: fica fora de qualquer compra futura. */
+  /** Menor de 18: não pode comprar gemas com dinheiro real. */
   minor: boolean;
+  /** Já confirmou o kart inicial. Antes disso, o jogo fica na Garagem em modo de criação. */
+  onboarded: boolean;
 }
 
 export interface HistoryEntry {
@@ -172,6 +123,8 @@ export interface MeResponse {
   level: LevelView;
   /** Moedas do jogo (ganhas correndo, gastas na loja). */
   coins: number;
+  /** Gemas (compradas com dinheiro real, por Pix). */
+  gems: number;
   stats: CareerStats[];
   records: TrackRecordView[];
   /** Ids ("slot:chave") dos cosméticos possuídos. */

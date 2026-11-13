@@ -1,12 +1,14 @@
 import type { HistoryEntry, MeResponse, RankingEntry } from '@kart/shared';
-import { buyBlock, COSMETIC_ITEMS, levelTitle, SHOP, SIM_HZ } from '@kart/shared';
+import { CATALOG_ITEMS, levelTitle, RARITIES, SIM_HZ } from '@kart/shared';
 import { SLOT_LABELS } from '../cosmetics/catalog';
 import type { Loadout } from '../cosmetics/catalog';
-import { currentAccount, fetchRanking, buyItem, logout, refreshAccount } from '../net/account';
+import { currentAccount, fetchRanking, logout, refreshAccount } from '../net/account';
 import { btn, el } from '../ui/dom';
 import type { SectionDef } from '../ui/sections';
 import { block, createSections, stat } from '../ui/sections';
-import { formatCoins, initials, reopenScreen, setHints, updatePilot } from '../ui/shell';
+import { initials, reopenScreen, setHints, updatePilot } from '../ui/shell';
+import { buyButtons, formatCoins, formatGems, rarityTag } from '../ui/buy';
+import { renderGemStore } from './gemStore';
 import { swatchColors } from './garageScreen';
 import { createShowroom } from './showroom';
 import type { AppContext, GameScreen } from './types';
@@ -79,6 +81,8 @@ export function createAccountScreen(context: AppContext): GameScreen {
   let disposed = false;
   let ranking: readonly RankingEntry[] | null = null;
   let rankingError = false;
+  /** Desliga a espera do Pix da seção de gemas. */
+  let stopStore: () => void = () => undefined;
 
   const signedIn = (me: MeResponse): SectionDef[] => {
     const { user, rating, season } = me;
@@ -91,7 +95,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
       null,
     );
     const wins = me.history.filter((row) => row.position === 1).length;
-    const owned = COSMETIC_ITEMS.filter((item) => me.inventory.includes(item.id)).length;
+    const owned = CATALOG_ITEMS.filter((item) => me.inventory.includes(item.id)).length;
     return [
       {
         id: 'resumo',
@@ -133,6 +137,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
           stats.append(
             stat(String(rating.points), 'Pontos', true),
             stat(me.coins.toLocaleString('pt-BR'), 'Moedas'),
+            stat(me.gems.toLocaleString('pt-BR'), 'Gemas'),
             stat(String(rating.matches), 'Ranqueadas'),
             stat(String(wins), 'Vitórias recentes'),
             stat(formatTime(best), 'Melhor volta'),
@@ -238,96 +243,97 @@ export function createAccountScreen(context: AppContext): GameScreen {
       },
       {
         id: 'niveis',
-        group: 'Piloto',
-        label: 'Progressão e loja',
-        note: 'Corridas rendem experiência e moedas; níveis liberam itens para comprar',
-        value: () => `Nível ${me.level.level} · ${formatCoins(me.coins)}`,
+        group: 'Loja',
+        label: 'Itens',
+        note: 'Compre com moedas (ganhas correndo) ou com gemas',
+        value: () => `${formatCoins(me.coins)} · ${formatGems(me.gems)}`,
         render(body) {
           const wallet = el('div', 'dados');
           wallet.append(
             stat(me.coins.toLocaleString('pt-BR'), 'Moedas', true),
+            stat(me.gems.toLocaleString('pt-BR'), 'Gemas'),
             stat(String(me.level.level), 'Nível'),
-            stat(
-              me.level.needed ? String(me.level.needed - me.level.into) : '—',
-              'XP para o próximo',
-            ),
           );
-          const list = el('ul', 'colecao');
           const error = el('p', 'erro');
           error.setAttribute('role', 'alert');
           error.hidden = true;
-          for (const offer of SHOP) {
-            const item = COSMETIC_ITEMS.find((entry) => entry.id === offer.id);
-            if (!item) continue;
-            const block = buyBlock(offer.id, me.level.level, me.coins, me.inventory);
-            const row = el('li', 'colecao-item');
-            row.dataset.bloqueado = String(block === 'level');
+          const list = el('ul', 'colecao');
+          const order = RARITIES.map((entry) => entry.id);
+          const offers = CATALOG_ITEMS.filter(
+            (item) => !item.isDefault && !me.inventory.includes(item.id),
+          ).sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity));
+          for (const item of offers) {
+            const row = el('li', 'colecao-item loja-item');
+            row.dataset.raridade = item.rarity;
             const swatch = el('span', 'colecao-cor');
-            const colors = swatchColors(item.slot as keyof Loadout, item.key);
+            const colors =
+              item.slot in SLOT_LABELS ? swatchColors(item.slot as keyof Loadout, item.key) : [];
             swatch.style.background =
               colors.length > 1
                 ? `linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%)`
                 : (colors[0] ?? 'var(--superficie-3)');
             const text = el('span', 'colecao-texto');
-            text.append(
-              el('strong', '', item.name),
-              el(
-                'small',
-                '',
-                block === 'owned'
-                  ? 'Na sua coleção'
-                  : block === 'level'
-                    ? `Libera no nível ${offer.level} · ${formatCoins(offer.price)}`
-                    : block === 'coins'
-                      ? `${formatCoins(offer.price)} · faltam ${(offer.price - me.coins).toLocaleString('pt-BR')}`
-                      : formatCoins(offer.price),
-              ),
+            const title = el('strong', '', item.name);
+            text.append(title, rarityTag(item.id));
+            row.append(
+              swatch,
+              text,
+              buyButtons(item.id, {
+                onBought() {
+                  if (disposed) return;
+                  context.setStatus(`${item.name} comprado. Equipe na Garagem.`);
+                  render();
+                },
+                onError(message) {
+                  if (disposed) return;
+                  error.hidden = false;
+                  error.textContent = message;
+                  sections.refresh();
+                },
+              }),
             );
-            row.append(swatch, text);
-            if (block === 'owned') {
-              row.append(el('span', 'etiqueta', 'Seu'));
-            } else {
-              const buy = btn('primario', 'Comprar', () => {
-                buy.disabled = true;
-                error.hidden = true;
-                buyItem(offer.id)
-                  .then(() => {
-                    if (disposed) return;
-                    context.setStatus(`${item.name} comprado. Equipe na Garagem.`);
-                    render();
-                  })
-                  .catch((reason: unknown) => {
-                    if (disposed) return;
-                    buy.disabled = false;
-                    error.hidden = false;
-                    error.textContent =
-                      reason instanceof Error ? reason.message : 'Não consegui comprar.';
-                  });
-              });
-              buy.disabled = block !== null;
-              buy.setAttribute(
-                'aria-label',
-                `Comprar ${item.name} por ${formatCoins(offer.price)}`,
-              );
-              const cell = el('span', 'botoes');
-              cell.append(buy);
-              row.append(cell);
-            }
             list.append(row);
           }
           body.append(
             wallet,
-            block('Loja', list, error),
+            error,
+            offers.length > 0
+              ? block('À venda', list)
+              : el('p', 'nota', 'Você já tem todos os itens do catálogo.'),
             block(
-              'Como ganhar',
+              'Raridades',
               el(
                 'p',
                 'nota',
-                'Cada corrida online rende experiência (participar, completar, chegar na frente, correr limpo, bater a sua melhor volta) e moedas na mesma proporção. Subir de nível dá um bônus em moedas. O Ranqueado rende 25% a mais; sala privada rende metade e só com outro piloto.',
+                'Comum e raro: só moedas. Épico: moedas ou gemas. Lendário e exclusivo: só gemas. Com moedas, alguns itens pedem um nível de carreira; com gemas, não. Nenhum item muda o desempenho do kart.',
+              ),
+            ),
+            block(
+              'Como ganhar moedas',
+              el(
+                'p',
+                'nota',
+                'Cada corrida online rende experiência e moedas na mesma proporção, e subir de nível dá um bônus. O Ranqueado rende 25% a mais; sala privada rende metade e só com outro piloto.',
               ),
             ),
             block('Próximo título', el('p', 'nota', nextTitle(me.level.level))),
           );
+        },
+      },
+      {
+        id: 'gemas',
+        group: 'Loja',
+        label: 'Gemas',
+        note: 'Compre gemas por Pix',
+        value: () => formatGems(me.gems),
+        render(body) {
+          stopStore();
+          stopStore = renderGemStore(body, {
+            setStatus: context.setStatus,
+            onPaid() {
+              if (!disposed) render();
+            },
+          });
         },
       },
       {
@@ -372,16 +378,16 @@ export function createAccountScreen(context: AppContext): GameScreen {
         id: 'colecao',
         group: 'Coleção',
         label: 'Inventário',
-        note: 'Itens especiais da conta, comprados com moedas. O resto do catálogo é livre.',
-        value: () => `${owned} de ${COSMETIC_ITEMS.length}`,
+        note: 'Tudo o que é seu: itens básicos e o que você comprou',
+        value: () => `${owned} de ${CATALOG_ITEMS.length}`,
         render(body) {
           const list = el('ul', 'colecao');
-          for (const item of COSMETIC_ITEMS) {
-            const has = me.inventory.includes(item.id);
+          for (const item of CATALOG_ITEMS.filter((entry) => me.inventory.includes(entry.id))) {
             const row = el('li', 'colecao-item');
-            row.dataset.bloqueado = String(!has);
+            row.dataset.raridade = item.rarity;
             const swatch = el('span', 'colecao-cor');
-            const colors = swatchColors(item.slot as keyof Loadout, item.key);
+            const colors =
+              item.slot in SLOT_LABELS ? swatchColors(item.slot as keyof Loadout, item.key) : [];
             swatch.style.background =
               colors.length > 1
                 ? `linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%)`
@@ -389,9 +395,15 @@ export function createAccountScreen(context: AppContext): GameScreen {
             const text = el('span', 'colecao-texto');
             text.append(
               el('strong', '', item.name),
-              el('small', '', SLOT_LABELS[item.slot as keyof Loadout] ?? item.slot),
+              el(
+                'small',
+                '',
+                item.slot in SLOT_LABELS
+                  ? SLOT_LABELS[item.slot as keyof Loadout]
+                  : 'Pintura livre',
+              ),
             );
-            row.append(swatch, text, el('span', 'etiqueta', has ? 'Seu' : 'Bloqueado'));
+            row.append(swatch, text, rarityTag(item.id));
             list.append(row);
           }
           const actions = el('div', 'botoes');
@@ -400,15 +412,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
               window.location.hash = 'garagem';
             }),
           );
-          body.append(
-            list,
-            el(
-              'p',
-              'nota',
-              'Não há loja: itens bloqueados são comprados com moedas em Progressão e loja.',
-            ),
-            actions,
-          );
+          body.append(list, actions);
         },
       },
       {
@@ -494,6 +498,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
     },
     dispose() {
       disposed = true;
+      stopStore();
       sections.dispose();
       context.ui.replaceChildren();
       showroom.dispose();

@@ -10,9 +10,11 @@ import type { Driver } from '../models/driver';
 import { createDriver } from '../models/driver';
 import type { PilotPose } from '../models/pilot/PilotRig';
 import {
-  buyItem,
+  confirmStarterKart,
   currentAccount,
   isUnlocked,
+  needsOnboarding,
+  ownsItem,
   refreshAccount,
   saveAccountLook,
   sessionToken,
@@ -26,8 +28,15 @@ import {
 } from '../render/studio';
 import { quality } from '../settings';
 import { arrowNavigation } from '../ui/arrows';
-import { buyBlock, shopItem } from '@kart/shared';
-import { formatCoins, setHints, updatePilot } from '../ui/shell';
+import {
+  catalogItem,
+  DEFAULT_ITEM_IDS,
+  missingItems,
+  presetLimit,
+  rarityLabel,
+} from '@kart/shared';
+import { buyButtons, priceLine, rarityTag } from '../ui/buy';
+import { reopenScreen, setHints, updatePilot } from '../ui/shell';
 import { createPaintEditor } from './paintEditor';
 import { createHistory } from '../cosmetics/history';
 import type { Preset } from '../cosmetics/presets';
@@ -281,6 +290,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
     refreshEditors();
     showPreview();
   };
+  const inventory = (): readonly string[] => currentAccount()?.inventory ?? [];
   let pose: PilotPose = 'seated';
   let category = CATEGORIES[0]!;
   // Com movimento reduzido no sistema, a plataforma começa parada (o botão Girar liga).
@@ -316,27 +326,12 @@ export function createGarageScreen(context: AppContext): GameScreen {
   const heading = element('header', 'gar-itens-topo');
   const grid = element('div', 'gar-grade');
   const note = element('p', 'nota gar-aviso');
-  // Item da loja em pré-visualização: dá para comprar sem sair da Garagem.
-  let offerId = '';
-  const buyRow = element('div', 'botoes gar-comprar');
-  const buyButton = actionButton('primario', 'Comprar', () => {
-    if (!offerId) return;
-    buyButton.disabled = true;
-    buyItem(offerId)
-      .then(() => {
-        if (disposed) return;
-        updatePilot();
-        context.setStatus('Item comprado. Aplique para usar nas corridas.');
-        refreshState();
-      })
-      .catch((erro: unknown) => {
-        if (disposed) return;
-        context.setStatus(erro instanceof Error ? erro.message : 'Não consegui comprar.', true);
-        refreshState();
-      });
-  });
-  buyRow.append(buyButton);
+  // O que falta comprar para aplicar o visual da tela: dá para comprar sem sair da Garagem.
+  const buyRow = element('div', 'gar-comprar');
+  /** Kart inicial: a conta ainda escolhe só entre os itens básicos. */
+  const starting = needsOnboarding();
   buyRow.hidden = true;
+  let offered = '';
   const setPaint = (paint: KartPaint, final = true): void => {
     previewPaint = paint;
     // Arrastar um controle é um passo só: entra no histórico quando solta.
@@ -385,6 +380,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
   };
   const presetEditor = createPresetEditor({
     presets: () => presets,
+    limit: () => presetLimit(inventory()),
     colors: (preset) =>
       [
         preset.paint?.zones.fairing.color ?? swatchColors('livery', preset.loadout.livery)[0],
@@ -490,6 +486,9 @@ export function createGarageScreen(context: AppContext): GameScreen {
         const colors = swatchColors(category.slot, item.id);
         if (colors.length > 0) swatch.style.background = swatchBackground(colors);
         else swatch.dataset.vazio = 'true';
+        const id = `${category.slot}:${item.id}`;
+        card.dataset.item = id;
+        card.dataset.raridade = catalogItem(id)?.rarity ?? 'common';
         card.append(
           swatch,
           element('span', 'gar-item-nome', item.name),
@@ -545,21 +544,46 @@ export function createGarageScreen(context: AppContext): GameScreen {
     refreshEditors();
     showPreview();
   });
-  const applyButton = actionButton('primario', 'Aplicar', () => {
-    applied = { ...preview };
-    appliedPaint = previewPaint;
-    saveLoadout(applied);
-    savePaint(appliedPaint);
-    refreshState();
-    context.setStatus('Visual aplicado');
-    if (sessionToken()) {
-      saveAccountLook(applied, appliedPaint, presets)
-        .then(() => context.setStatus('Visual salvo na sua conta'))
-        .catch((erro: unknown) => {
-          context.setStatus(erro instanceof Error ? erro.message : 'Não consegui salvar.', true);
-        });
-    }
-  });
+  const applyButton = actionButton(
+    'primario',
+    starting ? 'Confirmar kart inicial' : 'Aplicar',
+    () => {
+      if (starting) {
+        applyButton.disabled = true;
+        context.setStatus('Confirmando o kart inicial…');
+        confirmStarterKart(preview, previewPaint)
+          .then(() => {
+            saveLoadout(preview);
+            savePaint(previewPaint);
+            context.setStatus('Kart inicial confirmado. Boas corridas!');
+            window.location.hash = 'menu';
+            reopenScreen();
+          })
+          .catch((erro: unknown) => {
+            if (disposed) return;
+            context.setStatus(
+              erro instanceof Error ? erro.message : 'Não consegui confirmar.',
+              true,
+            );
+            refreshState();
+          });
+        return;
+      }
+      applied = { ...preview };
+      appliedPaint = previewPaint;
+      saveLoadout(applied);
+      savePaint(appliedPaint);
+      refreshState();
+      context.setStatus('Visual aplicado');
+      if (sessionToken()) {
+        saveAccountLook(applied, appliedPaint, presets)
+          .then(() => context.setStatus('Visual salvo na sua conta'))
+          .catch((erro: unknown) => {
+            context.setStatus(erro instanceof Error ? erro.message : 'Não consegui salvar.', true);
+          });
+      }
+    },
+  );
   actions.append(pending, undoButton, redoButton, discardButton, applyButton);
   bar.append(view, actions);
 
@@ -591,7 +615,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
       card.setAttribute('aria-pressed', String(preview[category.slot] === id));
       card.dataset.bloqueado = String(locked);
       const state = card.lastElementChild!;
-      state.textContent = locked ? 'Bloqueado' : equipped ? 'Equipado' : '';
+      state.textContent = locked ? priceLine(`${category.slot}:${id}`) : equipped ? 'Equipado' : '';
     }
     for (const [id, button] of poseButtons)
       button.setAttribute('aria-pressed', String(id === pose));
@@ -603,39 +627,67 @@ export function createGarageScreen(context: AppContext): GameScreen {
         preview[slot] !== applied[slot] ||
         (slot === 'livery' && !samePaint(previewPaint, appliedPaint)),
     );
-    // Com pintura livre, a pintura pronta escolhida por baixo não conta.
-    const locked = slots.filter(
-      (slot) => !(slot === 'livery' && previewPaint) && !isUnlocked(slot, preview[slot]),
+    // Tudo o que o visual da tela usa e a conta não tem: itens do catálogo e
+    // partes da pintura livre (acabamento, padrão, adesivos, espaço extra).
+    const missing = missingItems(
+      { ...preview },
+      previewPaint,
+      starting ? DEFAULT_ITEM_IDS : inventory(),
     );
+    // Marca nos editores o que não é da conta; no kart inicial, o que não é básico some.
+    for (const node of panel.querySelectorAll<HTMLElement>('[data-item]')) {
+      const id = node.dataset.item ?? '';
+      const owned = ownsItem(id);
+      node.dataset.bloqueado = String(!owned);
+      if (starting) node.hidden = !owned;
+      else if (!node.classList.contains('gar-item')) node.title = owned ? '' : priceLine(id);
+    }
     discardButton.disabled = changed.length === 0;
-    applyButton.disabled = changed.length === 0 || locked.length > 0;
-    pending.textContent =
-      changed.length === 0
+    applyButton.disabled = starting
+      ? missing.length > 0
+      : changed.length === 0 || missing.length > 0;
+    pending.textContent = starting
+      ? 'Monte o seu kart inicial'
+      : changed.length === 0
         ? ''
         : `${changed.length} ${changed.length === 1 ? 'alteração' : 'alterações'} sem aplicar`;
-    // Item bloqueado pode ser visto no kart, mas não aplicado.
-    // Item bloqueado é da loja: mostra o que falta e, podendo, o botão de comprar.
-    const account = currentAccount();
-    const lockedSlot = locked[0];
-    const offer = lockedSlot ? shopItem(`${lockedSlot}:${preview[lockedSlot]}`) : undefined;
-    const block =
-      offer && account
-        ? buyBlock(offer.id, account.level.level, account.coins, account.inventory)
-        : 'unknown';
-    offerId = offer && block === null ? offer.id : '';
-    buyRow.hidden = !offer || block === 'owned';
-    buyButton.disabled = offerId === '';
-    buyButton.textContent = offer ? `Comprar · ${formatCoins(offer.price)}` : 'Comprar';
-    note.textContent =
-      locked.length === 0 || !lockedSlot
-        ? ''
-        : !offer
-          ? `Só pré-visualização: ${itemName(lockedSlot, preview[lockedSlot])} ainda não está no seu inventário.`
-          : block === 'level'
-            ? `${itemName(lockedSlot, preview[lockedSlot])} libera no nível ${offer.level} (${formatCoins(offer.price)}). Você está no nível ${account?.level.level ?? 1}.`
-            : block === 'coins'
-              ? `${itemName(lockedSlot, preview[lockedSlot])} custa ${formatCoins(offer.price)}: faltam ${(offer.price - (account?.coins ?? 0)).toLocaleString('pt-BR')}.`
-              : `${itemName(lockedSlot, preview[lockedSlot])} está na loja. Compre para poder aplicar.`;
+
+    const first = missing[0] ?? '';
+    const item = first ? catalogItem(first) : undefined;
+    note.textContent = !item
+      ? ''
+      : starting
+        ? `${item.name} não é item básico: escolha outro para o kart inicial.`
+        : missing.length === 1
+          ? `Para aplicar, falta ${item.name} (${rarityLabel(item.rarity)}).`
+          : `Para aplicar, faltam ${missing.length} itens. O primeiro: ${item.name} (${rarityLabel(item.rarity)}).`;
+    buyRow.hidden = !item || starting;
+    // Só refaz os botões quando muda o item ou o saldo (não perde o foco à toa).
+    const key = item ? `${first}|${currentAccount()?.coins}|${currentAccount()?.gems}` : '';
+    if (key !== offered) {
+      offered = key;
+      buyRow.replaceChildren(
+        ...(item && !starting
+          ? [
+              rarityTag(first),
+              buyButtons(first, {
+                onBought() {
+                  if (disposed) return;
+                  updatePilot();
+                  context.setStatus(`${item.name} comprado. Aplique para usar nas corridas.`);
+                  refreshState();
+                },
+                onError(message) {
+                  if (disposed) return;
+                  context.setStatus(message, true);
+                  offered = '';
+                  refreshState();
+                },
+              }),
+            ]
+          : []),
+      );
+    }
   }
 
   function showPreview(): void {

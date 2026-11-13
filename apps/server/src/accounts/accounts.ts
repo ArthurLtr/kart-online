@@ -3,6 +3,7 @@ import type {
   AccountView,
   AuthResponse,
   Cosmetics,
+  Currency,
   CustomPaint,
   GoogleProfileNeeded,
   MeResponse,
@@ -11,15 +12,20 @@ import type {
   RankingEntry,
 } from '@kart/shared';
 import {
-  COSMETIC_ITEMS,
   buyBlock,
+  catalogItem,
+  DEFAULT_ITEM_IDS,
   filterOwnedCosmetics,
+  LOADOUT_SLOTS,
+  missingItems,
+  paintRequirements,
+  presetLimit,
+  priceIn,
   levelView,
   ratingView,
   sanitizeCosmetics,
   sanitizeCustomPaint,
   sanitizePresets,
-  shopItem,
   WELCOME_COINS,
   sanitizeName,
 } from '@kart/shared';
@@ -117,7 +123,9 @@ export class Accounts {
       name: user.profile?.nickname ?? 'Piloto',
       guest: user.isGuest,
       email: user.email,
-      minor: user.birthDate ? ageOn(user.birthDate, new Date()) < 18 : false,
+      // Sem data de nascimento não dá para saber a idade: vale a regra mais restrita.
+      minor: user.birthDate ? ageOn(user.birthDate, new Date()) < 18 : true,
+      onboarded: user.hasCompletedOnboarding,
     };
   }
 
@@ -125,20 +133,8 @@ export class Accounts {
     return { token: signToken(user.id, config.authSecret), user: this.view(user) };
   }
 
-  private async grantStarters(userId: string): Promise<void> {
-    await this.prisma.inventory.createMany({
-      data: COSMETIC_ITEMS.filter((item) => item.starter).map((item) => ({
-        userId,
-        itemId: item.id,
-        source: 'starter',
-      })),
-      skipDuplicates: true,
-    });
-  }
-
-  /** Itens iniciais e moedas de boas-vindas de uma conta recém-criada. */
+  /** Moedas de boas-vindas de uma conta recém-criada. Os itens básicos vêm no kart inicial. */
   private async welcome(userId: string): Promise<void> {
-    await this.grantStarters(userId);
     const already = await this.prisma.coinEntry.findFirst({
       where: { userId, reason: 'welcome' },
     });
@@ -209,36 +205,130 @@ export class Accounts {
   }
 
   /**
-   * Compra um item da loja com moedas. O saldo só baixa se ainda cobrir o preço
-   * (duas compras ao mesmo tempo não deixam o saldo negativo).
+   * Kart inicial (primeiro acesso): o jogador monta o visual só com itens
+   * básicos. O servidor confere isso, entrega todos os itens básicos, grava o
+   * visual e marca a conta como pronta. Só vale uma vez.
    */
-  async buy(userId: string, itemId: unknown): Promise<{ coins: number; inventory: string[] }> {
-    const offer = typeof itemId === 'string' ? shopItem(itemId) : undefined;
-    if (!offer) throw new HttpError(404, 'Este item não está na loja.');
-    const profile = await this.prisma.profile.findUnique({ where: { userId } });
-    if (!profile) throw new HttpError(401, 'Sessão inválida.');
-    const owned = await this.owned(userId);
-    const block = buyBlock(offer.id, profile.level, profile.coins, owned);
-    if (block === 'owned') throw new HttpError(409, 'Você já tem este item.');
-    if (block === 'level') {
-      throw new HttpError(403, `Este item libera no nível ${offer.level}.`);
+  async onboarding(userId: string, body: Record<string, unknown>): Promise<Cosmetics> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new HttpError(401, 'Sessão inválida.');
+    if (user.hasCompletedOnboarding) {
+      throw new HttpError(409, 'O kart inicial já foi confirmado.');
     }
-    if (block === 'coins') {
-      throw new HttpError(403, `Faltam ${offer.price - profile.coins} moedas.`);
+    const loadout = sanitizeCosmetics(body.loadout);
+    const paint = sanitizeCustomPaint(body.paint);
+    const defaults = new Set(DEFAULT_ITEM_IDS);
+    for (const slot of LOADOUT_SLOTS) {
+      if (!loadout[slot]) throw new HttpError(400, `Escolha um item para: ${slot}.`);
     }
+    const extra = missingItems(loadout, paint, defaults);
+    if (extra.length > 0) {
+      const names = extra.map((id) => catalogItem(id)?.name ?? id).join(', ');
+      throw new HttpError(403, `O kart inicial só pode usar itens básicos. Tire: ${names}.`);
+    }
+    const data = JSON.parse(
+      JSON.stringify({ ...loadout, [PAINT_KEY]: paint, [PRESETS_KEY]: [] }),
+    ) as Prisma.InputJsonObject;
     await this.prisma.$transaction(async (tx) => {
-      const paid = await tx.profile.updateMany({
-        where: { userId, coins: { gte: offer.price } },
-        data: { coins: { decrement: offer.price } },
+      // Só passa quem ainda não confirmou: dois pedidos ao mesmo tempo não entregam duas vezes.
+      const marked = await tx.user.updateMany({
+        where: { id: userId, hasCompletedOnboarding: false },
+        data: { hasCompletedOnboarding: true },
       });
-      if (paid.count !== 1) throw new HttpError(403, 'Moedas insuficientes.');
-      await tx.inventory.create({ data: { userId, itemId: offer.id, source: 'purchase' } });
-      await tx.coinEntry.create({
-        data: { userId, amount: -offer.price, reason: 'purchase', ref: offer.id },
+      if (marked.count !== 1) throw new HttpError(409, 'O kart inicial já foi confirmado.');
+      await tx.inventory.createMany({
+        data: DEFAULT_ITEM_IDS.map((itemId) => ({ userId, itemId, source: 'starter' })),
+        skipDuplicates: true,
+      });
+      await tx.equippedLoadout.upsert({
+        where: { userId },
+        create: { userId, data },
+        update: { data },
       });
     });
-    const after = await this.prisma.profile.findUnique({ where: { userId } });
-    return { coins: after?.coins ?? 0, inventory: [...(await this.owned(userId))] };
+    return loadout;
+  }
+
+  /**
+   * Compra um item com moedas ou gemas. Tudo numa transação: o saldo só baixa
+   * se ainda cobrir o preço (duas compras ao mesmo tempo não o deixam negativo),
+   * a movimentação entra no extrato e o item vai para o inventário.
+   */
+  async purchase(
+    userId: string,
+    rawItem: unknown,
+    rawCurrency: unknown,
+  ): Promise<{ coins: number; gems: number; inventory: string[] }> {
+    const item = typeof rawItem === 'string' ? catalogItem(rawItem) : undefined;
+    if (!item) throw new HttpError(404, 'Este item não existe.');
+    if (rawCurrency !== 'coins' && rawCurrency !== 'gems') {
+      throw new HttpError(400, 'Escolha pagar com moedas ou com gemas.');
+    }
+    const currency: Currency = rawCurrency;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+    if (!user?.profile) throw new HttpError(401, 'Sessão inválida.');
+    if (!user.hasCompletedOnboarding) {
+      throw new HttpError(403, 'Confirme o seu kart inicial antes de comprar.');
+    }
+    const balance = currency === 'coins' ? user.profile.coins : user.gems;
+    const price = priceIn(item, currency);
+    const unit = currency === 'coins' ? 'moedas' : 'gemas';
+    const block = buyBlock(
+      item.id,
+      currency,
+      user.profile.level,
+      balance,
+      await this.owned(userId),
+    );
+    if (block === 'owned') throw new HttpError(409, 'Você já tem este item.');
+    if (block === 'currency' || price === null) {
+      throw new HttpError(
+        400,
+        item.isDefault ? 'Item básico não é vendido.' : `${item.name} não é vendido por ${unit}.`,
+      );
+    }
+    if (block === 'level') {
+      throw new HttpError(403, `Com moedas, este item libera no nível ${item.unlockLevel}.`);
+    }
+    if (block === 'balance') throw new HttpError(403, `Faltam ${price - balance} ${unit}.`);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (currency === 'coins') {
+        const paid = await tx.profile.updateMany({
+          where: { userId, coins: { gte: price } },
+          data: { coins: { decrement: price } },
+        });
+        if (paid.count !== 1) throw new HttpError(403, 'Moedas insuficientes.');
+        await tx.coinEntry.create({
+          data: { userId, amount: -price, reason: 'purchase', ref: item.id },
+        });
+      } else {
+        const paid = await tx.user.updateMany({
+          where: { id: userId, gems: { gte: price } },
+          data: { gems: { decrement: price } },
+        });
+        if (paid.count !== 1) throw new HttpError(403, 'Gemas insuficientes.');
+        await tx.gemLedger.create({
+          data: { userId, amount: -price, type: 'spend', referenceId: item.id },
+        });
+      }
+      // A chave (usuário, item) é única: a mesma compra duas vezes desfaz a segunda.
+      await tx.inventory.create({
+        data: { userId, itemId: item.id, source: `purchase:${currency}` },
+      });
+    });
+    const after = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+    return {
+      coins: after?.profile?.coins ?? 0,
+      gems: after?.gems ?? 0,
+      inventory: [...(await this.owned(userId))],
+    };
   }
 
   /**
@@ -304,13 +394,12 @@ export class Accounts {
     const data = (
       typeof row?.data === 'object' && row.data !== null && !Array.isArray(row.data) ? row.data : {}
     ) as Record<string, unknown>;
+    // Pintura que usa algo que a conta não possui (mais) não é devolvida nem vai para a pista.
+    const paint = PAINT_KEY in data ? sanitizeCustomPaint(data[PAINT_KEY]) : undefined;
     return {
       loadout: filterOwnedCosmetics(sanitizeCosmetics(data), owned),
-      paint: PAINT_KEY in data ? sanitizeCustomPaint(data[PAINT_KEY]) : undefined,
-      presets: sanitizePresets(data[PRESETS_KEY]).map((preset) => ({
-        ...preset,
-        loadout: filterOwnedCosmetics(preset.loadout, owned),
-      })),
+      paint: paint && !paintRequirements(paint).every((id) => owned.has(id)) ? null : paint,
+      presets: this.ownedPresets(sanitizePresets(data[PRESETS_KEY]), owned),
     };
   }
 
@@ -340,6 +429,7 @@ export class Accounts {
       rating: ratingView(rating.mu, rating.sigma, rating.matches),
       level: levelView(user.profile?.xp ?? 0),
       coins: user.profile?.coins ?? 0,
+      gems: user.gems,
       stats: stats.map((row) => ({
         mode: row.mode,
         matches: row.matches,
@@ -373,30 +463,31 @@ export class Accounts {
   }
 
   /**
-   * Salva o visual equipado: loadout, pintura livre e presets. Item de catálogo
-   * que o jogador não possui é recusado. Pintura e presets que não vierem no
-   * corpo ficam como estavam.
+   * Salva o visual equipado: loadout, pintura livre e presets. A posse é
+   * conferida aqui, item por item: os do visual e também os que a pintura livre
+   * usa (acabamentos, padrão, adesivos, espaço extra). Faltando qualquer um,
+   * nada é gravado. Pintura e presets que não vierem no corpo ficam como estavam.
    */
   async setLoadout(userId: string, body: Record<string, unknown>): Promise<Cosmetics> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new HttpError(401, 'Sessão inválida.');
+    if (!user.hasCompletedOnboarding) {
+      throw new HttpError(403, 'Confirme o seu kart inicial primeiro.');
+    }
     const owned = await this.owned(userId);
     const wanted = sanitizeCosmetics(body.loadout);
-    const allowed = filterOwnedCosmetics(wanted, owned);
-    const refused = Object.keys(wanted).filter((slot) => !(slot in allowed));
-    if (refused.length > 0) {
-      throw new HttpError(403, `Você não possui o item equipado em: ${refused.join(', ')}.`);
-    }
     const stored = await this.look(userId, owned);
     const paint = 'paint' in body ? sanitizeCustomPaint(body.paint) : stored.paint;
+    const missing = missingItems(wanted, paint ?? null, owned);
+    if (missing.length > 0) {
+      const names = missing.map((id) => catalogItem(id)?.name ?? id).join(', ');
+      throw new HttpError(403, `Você não possui: ${names}.`);
+    }
     const presets =
-      'presets' in body
-        ? sanitizePresets(body.presets).map((preset) => ({
-            ...preset,
-            loadout: filterOwnedCosmetics(preset.loadout, owned),
-          }))
-        : stored.presets;
+      'presets' in body ? this.ownedPresets(sanitizePresets(body.presets), owned) : stored.presets;
     const data = JSON.parse(
       JSON.stringify({
-        ...allowed,
+        ...wanted,
         ...(paint === undefined ? {} : { [PAINT_KEY]: paint }),
         [PRESETS_KEY]: presets,
       }),
@@ -406,7 +497,16 @@ export class Accounts {
       create: { userId, data },
       update: { data },
     });
-    return allowed;
+    return wanted;
+  }
+
+  /** Presets dentro do limite da conta e só com o que ela possui. */
+  private ownedPresets(presets: PresetData[], owned: ReadonlySet<string>): PresetData[] {
+    return presets.slice(0, presetLimit(owned)).map((preset) => ({
+      ...preset,
+      loadout: filterOwnedCosmetics(preset.loadout, owned),
+      paint: paintRequirements(preset.paint).every((id) => owned.has(id)) ? preset.paint : null,
+    }));
   }
 
   /** Identidade para a sala de corrida. */
@@ -420,7 +520,7 @@ export class Accounts {
     return {
       userId,
       name: user.profile?.nickname ?? 'Piloto',
-      guest: user.isGuest,
+      guest: user.isGuest || !user.hasCompletedOnboarding,
       cosmetics: loadout,
       paint: paint ?? null,
     };

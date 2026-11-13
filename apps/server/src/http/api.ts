@@ -3,12 +3,14 @@ import type { PublicConfig, QueueKind } from '@kart/shared';
 import { skillNumber } from '@kart/shared';
 import { HttpError } from '../accounts/auth.js';
 import { createGoogleVerifier } from '../accounts/google.js';
+import { FakePixProvider } from '../payments/PaymentProvider.js';
 import { config } from '../config.js';
 import type { Services } from '../services.js';
 
 const MAX_BODY_BYTES = 40_000;
 
-async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+/** Corpo da requisição como texto (o webhook precisa dele intacto). */
+async function readRaw(request: IncomingMessage): Promise<string> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request as AsyncIterable<Buffer>) {
@@ -16,9 +18,14 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
     if (size > MAX_BODY_BYTES) throw new HttpError(413, 'Requisição grande demais.');
     chunks.push(chunk);
   }
-  if (size === 0) return {};
+  return Buffer.concat(chunks).toString();
+}
+
+async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+  const raw = await readRaw(request);
+  if (raw.length === 0) return {};
   try {
-    const body = JSON.parse(Buffer.concat(chunks).toString()) as unknown;
+    const body = JSON.parse(raw) as unknown;
     if (typeof body === 'object' && body !== null) return body as Record<string, unknown>;
   } catch {
     // cai no erro abaixo
@@ -51,13 +58,19 @@ class RateLimiter {
 export function createApi(services: Services | null) {
   const verifyGoogle = createGoogleVerifier(config.googleClientId);
   const authLimiter = new RateLimiter(10, 60_000);
+  /** Pedidos de Pix por conta: evita encher o provedor de cobranças. */
+  const orderLimiter = new RateLimiter(6, 60_000);
 
-  async function route(request: IncomingMessage, path: string): Promise<unknown> {
+  async function route(
+    request: IncomingMessage,
+    path: string,
+    query: URLSearchParams,
+  ): Promise<unknown> {
     if (`${request.method} ${path}` === 'GET /api/config') {
       return { googleClientId: config.googleClientId ?? null } satisfies PublicConfig;
     }
     if (!services) throw new HttpError(503, 'Contas indisponíveis: o servidor está sem banco.');
-    const { accounts, matchmakers } = services;
+    const { accounts, matchmakers, store } = services;
     const method = request.method ?? 'GET';
     const key = `${method} ${path}`;
     const bearer = request.headers.authorization?.replace(/^Bearer /, '');
@@ -77,9 +90,44 @@ export function createApi(services: Services | null) {
         const body = await readJson(request);
         return accounts.google(await verifyGoogle(body.credential), body, optionalUser());
       }
-      case 'POST /api/shop/buy': {
+      case 'POST /api/garage/onboarding':
+        return { loadout: await accounts.onboarding(user(), await readJson(request)) };
+      case 'POST /api/garage/purchase': {
         const userId = user();
-        return accounts.buy(userId, (await readJson(request)).item);
+        const body = await readJson(request);
+        return accounts.purchase(userId, body.itemId, body.currency);
+      }
+      case 'POST /api/store/create-order': {
+        const userId = user();
+        orderLimiter.check(userId);
+        return store.createOrder(userId, (await readJson(request)).packageId);
+      }
+      case 'GET /api/store/order':
+        return store.order(user(), query.get('id'));
+      case 'POST /api/store/dev-pay': {
+        // Só existe com o Pix de mentira, que só existe fora de produção.
+        const fake = store.provider;
+        if (config.production || !(fake instanceof FakePixProvider)) {
+          throw new HttpError(404, 'Rota não encontrada.');
+        }
+        const order = await store.order(user(), (await readJson(request)).orderId);
+        const row = await services.prisma.paymentOrder.findUnique({ where: { id: order.orderId } });
+        if (!row?.externalId || !fake.settle(row.externalId, 'paid')) {
+          throw new HttpError(404, 'Pedido não encontrado.');
+        }
+        await store.settle(row.externalId);
+        return store.order(user(), order.orderId);
+      }
+      case 'POST /api/webhooks/payment': {
+        if (!store.provider) throw new HttpError(503, 'Loja de gemas desligada.');
+        const externalId = store.provider.parseWebhook({
+          rawBody: await readRaw(request),
+          headers: request.headers,
+          query,
+        });
+        // O que vale é a consulta ao provedor, não o corpo do aviso.
+        if (externalId) await store.settle(externalId);
+        return { ok: true };
       }
       case 'POST /api/auth/register':
         authLimiter.check(address);
@@ -125,16 +173,14 @@ export function createApi(services: Services | null) {
         await accounts.grant(body.user, body.item);
         return { ok: true };
       }
-      case 'POST /api/payments/webhook':
-        // Fluxo desenhado em payments/PaymentProvider.ts; a loja não existe nesta etapa.
-        throw new HttpError(501, 'Loja não implementada.');
       default:
         throw new HttpError(404, 'Rota não encontrada.');
     }
   }
 
   return function handle(request: IncomingMessage, response: ServerResponse): boolean {
-    const path = (request.url ?? '').split('?')[0] ?? '';
+    const [path = '', search = ''] = (request.url ?? '').split('?');
+    const query = new URLSearchParams(search);
     if (!path.startsWith('/api/')) return false;
     const headers = {
       'content-type': 'application/json; charset=utf-8',
@@ -147,7 +193,7 @@ export function createApi(services: Services | null) {
       response.writeHead(204, headers).end();
       return true;
     }
-    route(request, path)
+    route(request, path, query)
       .then((body) => response.writeHead(200, headers).end(JSON.stringify(body)))
       .catch((error: unknown) => {
         const known = error instanceof HttpError;

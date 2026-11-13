@@ -1,21 +1,23 @@
 import type {
   AuthResponse,
   Cosmetics,
+  Currency,
   CustomPaint,
   GoogleProfileNeeded,
   MeResponse,
+  OrderView,
   PublicConfig,
   QueueKind,
   QueueStatus,
   RankingEntry,
 } from '@kart/shared';
-import { COSMETIC_ITEMS, SERVER_DEFAULT_PORT } from '@kart/shared';
+import { DEFAULT_ITEM_IDS, SERVER_DEFAULT_PORT } from '@kart/shared';
 import type { Loadout } from '../cosmetics/catalog';
-import { CATALOG, loadLoadout, saveLoadout } from '../cosmetics/catalog';
+import { CATALOG, DEFAULT_LOADOUT, loadLoadout, saveLoadout } from '../cosmetics/catalog';
 import type { KartPaint } from '../cosmetics/paint';
-import { loadPaint, sanitizePaint, savePaint } from '../cosmetics/paint';
+import { sanitizePaint, savePaint } from '../cosmetics/paint';
 import type { Preset } from '../cosmetics/presets';
-import { loadPresets, presetsData, savePresets, toPresets } from '../cosmetics/presets';
+import { presetsData, savePresets, toPresets } from '../cosmetics/presets';
 
 const TOKEN_KEY = 'kart-online.token';
 
@@ -78,15 +80,17 @@ export const sessionToken = (): string | null => token;
 /** Último perfil carregado (ou `null` sem sessão). */
 export const currentAccount = (): MeResponse | null => me;
 
-const STARTERS = new Set(COSMETIC_ITEMS.filter((item) => item.starter).map((item) => item.id));
-const ITEM_IDS = new Set(COSMETIC_ITEMS.map((item) => item.id));
+/** Antes do kart inicial, valem os itens básicos; depois, só o inventário. */
+const usable = (): readonly string[] => (me && me.user.onboarded ? me.inventory : DEFAULT_ITEM_IDS);
 
-/** Falso para item de catálogo que a conta não possui. Sem conta, valem os itens iniciais. */
-export function isUnlocked(slot: string, id: string): boolean {
-  const itemId = `${slot}:${id}`;
-  if (!ITEM_IDS.has(itemId)) return true;
-  return me ? me.inventory.includes(itemId) : STARTERS.has(itemId);
-}
+/** A conta pode usar este item do catálogo (id "slot:chave"). */
+export const ownsItem = (itemId: string): boolean => usable().includes(itemId);
+
+/** Falso para item que a conta não possui (ou, no kart inicial, que não é básico). */
+export const isUnlocked = (slot: string, id: string): boolean => ownsItem(`${slot}:${id}`);
+
+/** Verdadeiro enquanto a conta ainda não confirmou o kart inicial. */
+export const needsOnboarding = (): boolean => me !== null && !me.user.guest && !me.user.onboarded;
 
 /** O loadout da conta passa a valer neste navegador também (treino, garagem). */
 function adoptLoadout(remote: Cosmetics): void {
@@ -94,7 +98,7 @@ function adoptLoadout(remote: Cosmetics): void {
   for (const slot of Object.keys(loadout) as (keyof Loadout)[]) {
     const id = remote[slot];
     if (id && CATALOG[slot].some((item) => item.id === id)) loadout[slot] = id;
-    if (!isUnlocked(slot, loadout[slot])) loadout[slot] = (CATALOG[slot][0] as { id: string }).id;
+    if (!isUnlocked(slot, loadout[slot])) loadout[slot] = DEFAULT_LOADOUT[slot];
   }
   saveLoadout(loadout);
 }
@@ -105,13 +109,7 @@ export async function refreshAccount(): Promise<MeResponse | null> {
   try {
     me = await request<MeResponse>('GET', '/api/me');
     adoptLoadout(me.loadout);
-    if (me.paint === undefined) {
-      // Conta que nunca gravou pintura nem presets: o que está neste navegador sobe para ela.
-      const paint = loadPaint();
-      const presets = loadPresets();
-      if (paint || presets.length > 0)
-        void saveAccountLook(loadLoadout(), paint, presets).catch(() => undefined);
-    } else {
+    if (me.paint !== undefined) {
       savePaint(sanitizePaint(me.paint));
       savePresets(toPresets(me.presets));
     }
@@ -159,10 +157,40 @@ export async function loginWithGoogle(
   return refreshAccount();
 }
 
-/** Compra um item da loja com moedas e recarrega o perfil. */
-export async function buyItem(itemId: string): Promise<MeResponse | null> {
-  await request('POST', '/api/shop/buy', { item: itemId });
+/** Compra um item com moedas ou gemas e recarrega o perfil. */
+export async function purchaseItem(itemId: string, currency: Currency): Promise<MeResponse | null> {
+  await request('POST', '/api/garage/purchase', { itemId, currency });
   return refreshAccount();
+}
+
+/** Confirma o kart inicial (só itens básicos): o servidor entrega os itens e grava o visual. */
+export async function confirmStarterKart(
+  loadout: Loadout,
+  paint: KartPaint | null,
+): Promise<MeResponse | null> {
+  await request('POST', '/api/garage/onboarding', { loadout, paint });
+  return refreshAccount();
+}
+
+/** Pede um Pix para um pacote de gemas. */
+export const createGemOrder = (packageId: string): Promise<OrderView> =>
+  request('POST', '/api/store/create-order', { packageId });
+
+/** Estado de um pedido de gemas; quando sai pago, o perfil é recarregado. */
+export async function fetchGemOrder(orderId: string): Promise<OrderView> {
+  const order = await request<OrderView>(
+    'GET',
+    `/api/store/order?id=${encodeURIComponent(orderId)}`,
+  );
+  if (order.status === 'PAID') await refreshAccount();
+  return order;
+}
+
+/** Só no servidor de desenvolvimento (Pix de mentira): marca o pedido como pago. */
+export async function devPayOrder(orderId: string): Promise<OrderView> {
+  const order = await request<OrderView>('POST', '/api/store/dev-pay', { orderId });
+  if (order.status === 'PAID') await refreshAccount();
+  return order;
 }
 
 export const login = (form: Record<string, string>): Promise<MeResponse | null> =>

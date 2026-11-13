@@ -74,6 +74,7 @@ export function createStickerEditor(host: StickerHost): CustomEditor {
         host.focusSurface('top');
       }),
     );
+    button.dataset.item = `sticker:${shape.id}`;
     addRow.append(button);
     return button;
   });

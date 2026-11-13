@@ -5,7 +5,7 @@ import { connect } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import { COSMETIC_ITEMS } from '@kart/shared';
+import { CATALOG_ITEMS, DEFAULT_ITEM_IDS, paintRequirements } from '@kart/shared';
 import { config, SERVER_ROOT } from '../config.js';
 
 function reachable(host: string, port: number): Promise<boolean> {
@@ -85,15 +85,55 @@ function pushSchema(): void {
   if (result.status !== 0) throw new Error(`prisma db push falhou:\n${result.stderr}`);
 }
 
-/** Seed idempotente: os 12 cosméticos de exemplo. */
+/** Seed idempotente: o catálogo de cosméticos (raridade e preços) e a migração das contas antigas. */
 export async function seed(prisma: PrismaClient): Promise<void> {
-  for (const { id, slot, key, name, starter } of COSMETIC_ITEMS) {
+  for (const item of CATALOG_ITEMS) {
+    const data = {
+      slot: item.slot,
+      key: item.key,
+      name: item.name,
+      starter: item.isDefault,
+      rarity: item.rarity,
+      priceCoins: item.priceCoins,
+      priceGems: item.priceGems,
+      unlockLevel: item.unlockLevel,
+    };
     await prisma.cosmeticItem.upsert({
-      where: { id },
-      create: { id, slot, key, name, starter },
-      update: { slot, key, name, starter },
+      where: { id: item.id },
+      create: { id: item.id, ...data },
+      update: data,
     });
   }
+  await migrateLegacyAccounts(prisma);
+}
+
+/**
+ * Contas de antes do kart inicial: já tinham um visual gravado, então não
+ * passam pelo onboarding. Recebem os itens básicos e ficam com tudo o que
+ * estavam usando (na época era livre), para ninguém perder o próprio kart.
+ */
+async function migrateLegacyAccounts(prisma: PrismaClient): Promise<void> {
+  const known = new Set(CATALOG_ITEMS.map((item) => item.id));
+  const legacy = await prisma.user.findMany({
+    where: { hasCompletedOnboarding: false, isGuest: false, loadout: { isNot: null } },
+    include: { loadout: true },
+  });
+  for (const user of legacy) {
+    const data = (user.loadout?.data ?? {}) as Record<string, unknown>;
+    const using = new Set(DEFAULT_ITEM_IDS);
+    for (const [slot, key] of Object.entries(data)) {
+      if (typeof key === 'string' && known.has(`${slot}:${key}`)) using.add(`${slot}:${key}`);
+    }
+    for (const id of paintRequirements(data.$paint)) if (known.has(id)) using.add(id);
+    await prisma.$transaction([
+      prisma.inventory.createMany({
+        data: [...using].map((itemId) => ({ userId: user.id, itemId, source: 'legacy' })),
+        skipDuplicates: true,
+      }),
+      prisma.user.update({ where: { id: user.id }, data: { hasCompletedOnboarding: true } }),
+    ]);
+  }
+  if (legacy.length > 0) console.log(`[banco] ${legacy.length} conta(s) antiga(s) migrada(s)`);
 }
 
 /** Garante o banco no ar, com tabelas e seed, e devolve o cliente Prisma. */

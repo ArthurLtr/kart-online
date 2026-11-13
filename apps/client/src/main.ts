@@ -5,7 +5,7 @@ import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-700-italic.css';
 import { Clock } from 'three';
 import { createModelProvider } from './models';
-import { currentAccount, hasAccount, refreshAccount } from './net/account';
+import { currentAccount, hasAccount, needsOnboarding, refreshAccount } from './net/account';
 import type { PostFx } from './render/postfx';
 import { createPostFx } from './render/postfx';
 import { applyRendererQuality, createRenderer } from './render/renderer';
@@ -81,7 +81,15 @@ function resize(): void {
 
 function show(wanted: ScreenName): void {
   // Sem conta não se joga: qualquer rota cai na tela de entrada.
-  const name: ScreenName = hasAccount() ? (wanted === 'entrar' ? 'menu' : wanted) : 'entrar';
+  // Conta nova monta o kart inicial na Garagem antes de qualquer outra tela.
+  const name: ScreenName = !hasAccount()
+    ? 'entrar'
+    : needsOnboarding()
+      ? 'garagem'
+      : wanted === 'entrar'
+        ? 'menu'
+        : wanted;
+  document.body.dataset.inicio = String(hasAccount() && needsOnboarding());
   screen?.dispose();
   postfx?.dispose();
   setHints([]);

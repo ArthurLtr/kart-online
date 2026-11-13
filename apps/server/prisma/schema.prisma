@@ -9,15 +9,19 @@ datasource db {
 
 /// Convidado (só apelido) ou conta com e-mail.
 model User {
-  id           String    @id @default(cuid())
-  email        String?   @unique
-  passwordHash String?
+  id                     String    @id @default(cuid())
+  email                  String?   @unique
+  passwordHash           String?
   /// Identificador da conta Google ("sub" do token), para quem entra com Google.
-  googleId     String?   @unique
-  isGuest      Boolean   @default(true)
+  googleId               String?   @unique
+  isGuest                Boolean   @default(true)
   /// Obrigatória em conta com e-mail; usada nas regras de idade.
-  birthDate    DateTime? @db.Date
-  createdAt    DateTime  @default(now())
+  birthDate              DateTime? @db.Date
+  createdAt              DateTime  @default(now())
+  /// Gemas: moeda comprada com dinheiro real (Pix). O extrato fica em GemLedger.
+  gems                   Int       @default(0)
+  /// Já confirmou o kart inicial na Garagem.
+  hasCompletedOnboarding Boolean   @default(false)
 
   profile     Profile?
   ratings     Rating[]
@@ -27,6 +31,8 @@ model User {
   records     TrackRecord[]
   tickets     MatchmakingTicket[]
   coinEntries CoinEntry[]
+  gemEntries  GemLedger[]
+  orders      PaymentOrder[]
   inventory   Inventory[]
   loadout     EquippedLoadout?
 }
@@ -238,14 +244,69 @@ model CoinEntry {
   @@index([userId, createdAt])
 }
 
+/// Extrato das gemas: compras por Pix, gastos na loja, estornos. O saldo fica em User.gems.
+model GemLedger {
+  id          String   @id @default(cuid())
+  userId      String
+  /// Positivo = entrou; negativo = saiu.
+  amount      Int
+  /// "purchase" (Pix pago), "spend" (item comprado) ou "refund" (Pix estornado).
+  type        String
+  /// Pedido de pagamento ou item a que a movimentação se refere.
+  referenceId String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  REFUNDED
+}
+
+/// Pedido de gemas pago por Pix. As gemas só são creditadas quando o provedor confirma.
+model PaymentOrder {
+  id           String        @id @default(cuid())
+  userId       String
+  packageId    String
+  /// Valor em centavos de real.
+  amountBrl    Int
+  gemsAmount   Int
+  /// "mercadopago" (ou "fake" em desenvolvimento).
+  provider     String
+  /// Id da cobrança no provedor.
+  externalId   String?
+  status       PaymentStatus @default(PENDING)
+  /// Código "copia e cola" e imagem do QR (base64), para reabrir o pedido.
+  qrCode       String?
+  qrCodeBase64 String?
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
+  paidAt       DateTime?
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([userId, createdAt])
+}
+
 /// Catálogo de cosméticos que precisam ser possuídos. Id = "slot:chave".
 model CosmeticItem {
-  id      String  @id
-  slot    String
-  key     String
-  name    String
-  /// Entregue a toda conta nova.
-  starter Boolean @default(false)
+  id          String  @id
+  slot        String
+  key         String
+  name        String
+  /// Item básico: entregue a toda conta ao confirmar o kart inicial.
+  starter     Boolean @default(false)
+  /// "common", "rare", "epic", "legendary" ou "exclusive".
+  rarity      String  @default("common")
+  /// Preço em moedas e em gemas (nulo = não é vendido nessa moeda).
+  priceCoins  Int?
+  priceGems   Int?
+  /// Nível de carreira exigido para comprar com moedas.
+  unlockLevel Int     @default(0)
 
   owners Inventory[]
 }

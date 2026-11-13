@@ -1,4 +1,5 @@
 import { currentAccount } from '../net/account';
+import { formatCoins, formatGems } from './buy';
 
 /** Casca de navegação: cartão do piloto no topo e dicas de atalho no rodapé. */
 
@@ -23,10 +24,6 @@ function span(className: string, text: string): HTMLSpanElement {
   return element;
 }
 
-/** "1.250 moedas" (com o separador de milhar do português). */
-export const formatCoins = (coins: number): string =>
-  `${coins.toLocaleString('pt-BR')} ${coins === 1 ? 'moeda' : 'moedas'}`;
-
 /**
  * Reabre a tela do endereço atual. Usado depois de entrar ou sair da conta: a
  * mesma rota passa a mostrar outra coisa (o jogo ou a tela de entrada).
@@ -44,7 +41,7 @@ export function updatePilot(): void {
   let level = 'Entrar';
   if (me) {
     const { rating } = me;
-    const career = `Nv ${me.level.level} · ${formatCoins(me.coins)}`;
+    const career = `Nv ${me.level.level} · ${formatCoins(me.coins)} · ${formatGems(me.gems)}`;
     level = rating.division ? `${career} · ${rating.division}` : career;
   }
   const text = span('piloto-texto', '');
