@@ -32,9 +32,10 @@ export function updatePilot(): void {
   let level = 'Entrar';
   if (me) {
     const { rating } = me;
-    if (me.user.guest) level = 'Convidado';
-    else if (rating.division) level = `${rating.division} · ${rating.points} pts`;
-    else level = `Posicionamento · faltam ${rating.placementLeft}`;
+    const career = `Nv ${me.level.level}`;
+    if (me.user.guest) level = `${career} · Convidado`;
+    else if (rating.division) level = `${career} · ${rating.division} · ${rating.points} pts`;
+    else level = `${career} · Posicionamento`;
   }
   const text = span('piloto-texto', '');
   text.append(span('piloto-nome', name), span('piloto-nivel', level));

@@ -19,5 +19,8 @@
   "devDependencies": {
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "@dimforge/rapier2d-compat": "^0.21.0"
   }
 }

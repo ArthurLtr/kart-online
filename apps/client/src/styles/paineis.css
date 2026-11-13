@@ -692,3 +692,49 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* --- nível de carreira ----------------------------------------------------------- */
+
+.nivel {
+  display: grid;
+  gap: var(--e2);
+}
+
+.nivel-topo {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e2);
+}
+
+.nivel-topo strong {
+  font: italic 700 var(--t-xl) / 1 var(--fonte-titulo);
+  text-transform: uppercase;
+}
+
+.nivel-topo span {
+  color: var(--acento);
+  font: 600 var(--t-s) / 1 var(--fonte);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nivel-topo small {
+  margin-left: auto;
+  color: var(--texto-2);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nivel-barra {
+  height: 8px;
+  overflow: hidden;
+  background: var(--superficie-3);
+  transform: skewX(-18deg);
+}
+
+.nivel-barra i {
+  display: block;
+  height: 100%;
+  background: var(--acento);
+  transition: width var(--lento) var(--curva);
+}

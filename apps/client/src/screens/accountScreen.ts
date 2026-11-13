@@ -1,5 +1,5 @@
 import type { HistoryEntry, MeResponse, RankingEntry } from '@kart/shared';
-import { COSMETIC_ITEMS, SIM_HZ } from '@kart/shared';
+import { COSMETIC_ITEMS, LEVEL_REWARDS, levelTitle, SIM_HZ, xpForLevel } from '@kart/shared';
 import { SLOT_LABELS } from '../cosmetics/catalog';
 import type { Loadout } from '../cosmetics/catalog';
 import {
@@ -24,6 +24,16 @@ const MODE_NAMES: Record<string, string> = {
   private: 'Sala privada',
   ranked: 'Ranqueado',
 };
+
+const TRACK_NAMES: Record<string, string> = { 'circuito-da-orla': 'Circuito da Orla' };
+
+/** Frase com o próximo título de carreira e o nível em que ele chega. */
+function nextTitle(level: number): string {
+  for (let next = level + 1; next <= 100; next++) {
+    if (levelTitle(next) !== levelTitle(level)) return `${levelTitle(next)} no nível ${next}.`;
+  }
+  return 'Você já tem o título máximo.';
+}
 
 const formatTime = (ticks: number | null): string => {
   if (ticks === null) return '—';
@@ -99,6 +109,7 @@ const historyRows = (history: readonly HistoryEntry[]) =>
         formatTime(row.timeTicks),
         formatTime(row.bestLapTicks),
         delta === null ? '—' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)}`,
+        `+${row.xp}`,
       ],
     };
   });
@@ -228,6 +239,24 @@ export function createAccountScreen(context: AppContext): GameScreen {
             text,
             el('span', 'etiqueta', division),
           );
+          const { level } = me;
+          const bar = el('div', 'nivel');
+          const track = el('div', 'nivel-barra');
+          track.setAttribute('role', 'progressbar');
+          track.setAttribute('aria-label', 'Progresso do nível');
+          track.setAttribute('aria-valuemin', '0');
+          track.setAttribute('aria-valuemax', String(level.needed || 1));
+          track.setAttribute('aria-valuenow', String(level.needed ? level.into : 1));
+          const fill = el('i');
+          fill.style.width = `${level.needed ? (level.into / level.needed) * 100 : 100}%`;
+          track.append(fill);
+          const top = el('div', 'nivel-topo');
+          top.append(
+            el('strong', '', `Nível ${level.level}`),
+            el('span', '', level.title),
+            el('small', '', level.needed ? `${level.into} / ${level.needed} XP` : 'Nível máximo'),
+          );
+          bar.append(top, track);
           const stats = el('div', 'dados');
           stats.append(
             stat(String(rating.points), 'Pontos', true),
@@ -235,7 +264,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
             stat(String(wins), 'Vitórias recentes'),
             stat(formatTime(best), 'Melhor volta'),
           );
-          body.append(card, stats);
+          body.append(card, bar, stats);
           if (rating.placementLeft > 0) {
             body.append(
               el(
@@ -250,7 +279,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
             block(
               'Últimas corridas',
               recent.length > 0
-                ? table(['Modo', 'Posição', 'Tempo', 'Volta', 'Pts'], historyRows(recent))
+                ? table(['Modo', 'Posição', 'Tempo', 'Volta', 'Pts', 'XP'], historyRows(recent))
                 : el('p', 'nota', 'Nenhuma corrida ainda. Escolha um modo na tela Início.'),
             ),
           );
@@ -276,10 +305,105 @@ export function createAccountScreen(context: AppContext): GameScreen {
           body.append(
             me.history.length > 0
               ? table(
-                  ['Modo', 'Posição', 'Tempo', 'Melhor volta', 'Pontos'],
+                  ['Modo', 'Posição', 'Tempo', 'Melhor volta', 'Pontos', 'XP'],
                   historyRows(me.history),
                 )
               : el('p', 'nota', 'Nenhuma corrida ainda. Escolha um modo na tela Início.'),
+          );
+        },
+      },
+      {
+        id: 'carreira',
+        group: 'Piloto',
+        label: 'Carreira',
+        note: 'Seus números em cada modo e os recordes de pista',
+        value: () =>
+          plural(
+            me.stats.reduce((sum, row) => sum + row.matches, 0),
+            'corrida',
+            'corridas',
+          ),
+        render(body) {
+          if (me.stats.length === 0) {
+            body.append(el('p', 'nota', 'Corra online para começar a sua carreira.'));
+            return;
+          }
+          for (const mode of ['ranked', 'casual', 'private']) {
+            const row = me.stats.find((item) => item.mode === mode);
+            if (!row) continue;
+            const grid = el('div', 'dados');
+            grid.append(
+              stat(String(row.matches), 'Corridas'),
+              stat(String(row.wins), 'Vitórias', row.wins > 0),
+              stat(String(row.podiums), 'Pódios'),
+              stat(row.matches ? `${row.averagePosition.toFixed(1)}º` : '—', 'Posição média'),
+              stat(formatTime(row.bestLapTicks), 'Melhor volta'),
+            );
+            body.append(block(MODE_NAMES[mode] ?? mode, grid));
+          }
+          if (me.records.length > 0) {
+            body.append(
+              block(
+                'Recordes de pista',
+                table(
+                  ['Pista', 'Melhor volta', 'Melhor corrida'],
+                  me.records.map((row) => ({
+                    cells: [
+                      TRACK_NAMES[row.track] ?? row.track,
+                      formatTime(row.bestLapTicks),
+                      formatTime(row.bestRaceTicks),
+                    ],
+                  })),
+                ),
+              ),
+            );
+          }
+        },
+      },
+      {
+        id: 'niveis',
+        group: 'Piloto',
+        label: 'Níveis',
+        note: 'Cada corrida online rende experiência; níveis liberam itens',
+        value: () => `Nível ${me.level.level} · ${me.level.title}`,
+        render(body) {
+          const list = el('ul', 'colecao');
+          const rewards = Object.entries(LEVEL_REWARDS).sort((a, b) => a[1] - b[1]);
+          for (const [id, level] of rewards) {
+            const item = COSMETIC_ITEMS.find((entry) => entry.id === id);
+            if (!item) continue;
+            const reached = me.level.level >= level;
+            const row = el('li', 'colecao-item');
+            row.dataset.bloqueado = String(!reached);
+            const swatch = el('span', 'colecao-cor');
+            const colors = swatchColors(item.slot as keyof Loadout, item.key);
+            swatch.style.background =
+              colors.length > 1
+                ? `linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%)`
+                : (colors[0] ?? 'var(--superficie-3)');
+            const text = el('span', 'colecao-texto');
+            text.append(
+              el('strong', '', item.name),
+              el(
+                'small',
+                '',
+                reached ? 'Liberado' : `Faltam ${Math.max(0, xpForLevel(level) - me.level.xp)} XP`,
+              ),
+            );
+            row.append(swatch, text, el('span', 'etiqueta', `Nível ${level}`));
+            list.append(row);
+          }
+          body.append(
+            block('Recompensas', list),
+            block(
+              'Como ganhar experiência',
+              el(
+                'p',
+                'nota',
+                'Participar, completar a corrida, chegar na frente, correr limpo e bater a sua melhor volta rendem XP. O Ranqueado dá 25% a mais; sala privada rende metade e só com outro piloto.',
+              ),
+            ),
+            block('Próximo título', el('p', 'nota', nextTitle(me.level.level))),
           );
         },
       },
@@ -325,7 +449,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
         id: 'colecao',
         group: 'Coleção',
         label: 'Inventário',
-        note: 'Itens especiais da sua conta. O resto do catálogo é livre.',
+        note: 'Itens especiais da conta, liberados por nível. O resto do catálogo é livre.',
         value: () => `${owned} de ${COSMETIC_ITEMS.length}`,
         render(body) {
           const list = el('ul', 'colecao');
@@ -355,7 +479,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
           );
           body.append(
             list,
-            el('p', 'nota', 'Não há loja: itens bloqueados são concedidos pelo jogo.'),
+            el('p', 'nota', 'Não há loja: itens bloqueados são liberados ao subir de nível.'),
             actions,
           );
         },

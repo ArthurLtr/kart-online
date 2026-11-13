@@ -11,13 +11,16 @@ import {
   Matchmaker,
   MemoryQueueStore,
   RedisQueueStore,
+  skillSpread,
 } from './matchmaking.js';
-import { rateRace } from './rating.js';
+import { rateRace, rateWithBots } from './rating.js';
 
-const mm = { ...config.matchmaking, size: 9, minPlayers: 2 };
-const ticket = (userId: string, points: number, waitedSeconds = 0): Ticket => ({
+// Sem o termo da incerteza, as contas de faixa dos testes ficam diretas.
+const mm = { ...config.matchmaking.ranked, size: 9, minPlayers: 2, uncertaintyBand: 0 };
+const ticket = (userId: string, skill: number, waitedSeconds = 0, uncertainty = 0): Ticket => ({
   userId,
-  points,
+  skill,
+  uncertainty,
   joinedAt: 1_000_000 - waitedSeconds * 1000,
 });
 const NOW = 1_000_000;
@@ -108,26 +111,30 @@ describe('matchmaking por faixa de rating', () => {
 
 const stores: [string, () => QueueStore][] = [
   ['memória', () => new MemoryQueueStore()],
-  ['Redis', () => new RedisQueueStore(new RedisMock() as unknown as Redis)],
+  ['Redis', () => new RedisQueueStore(new RedisMock() as unknown as Redis, 'ranked')],
 ];
 
 describe.each(stores)('fila em %s', (_name, create) => {
   it('entra, forma a partida, entrega a reserva uma única vez', async () => {
     const created: string[][] = [];
-    const matchmaker = new Matchmaker(create(), { ...mm, size: 3 }, async (userIds) => {
+    const matchmaker = new Matchmaker('ranked', create(), { ...mm, size: 3 }, async (group) => {
+      const userIds = group.map((entry) => entry.userId);
       created.push(userIds);
-      return new Map(userIds.map((id) => [id, { room: 'sala', seat: id }]));
+      return {
+        roomId: 'sala',
+        reservations: new Map(userIds.map((id) => [id, { room: 'sala', seat: id }])),
+      };
     });
-    await matchmaker.join('a', 1000, NOW);
-    await matchmaker.join('b', 1100, NOW);
-    await matchmaker.join('a', 1000, NOW + 5000); // entrar de novo não reinicia a espera
+    await matchmaker.join('a', 1000, 0, NOW);
+    await matchmaker.join('b', 1100, 0, NOW);
+    await matchmaker.join('a', 1000, 0, NOW + 5000); // entrar de novo não reinicia a espera
     expect(await matchmaker.status('a', NOW + 8000)).toMatchObject({
       state: 'waiting',
       waitedSeconds: 8,
     });
     expect(await matchmaker.tick(NOW + 8000)).toBe(0);
 
-    await matchmaker.join('c', 1050, NOW + 9000);
+    await matchmaker.join('c', 1050, 0, NOW + 9000);
     expect(await matchmaker.tick(NOW + 9000)).toBe(1);
     expect(created[0]!.sort()).toEqual(['a', 'b', 'c']);
     expect(await matchmaker.status('b')).toMatchObject({
@@ -138,11 +145,59 @@ describe.each(stores)('fila em %s', (_name, create) => {
   });
 
   it('quem sai da fila não é chamado', async () => {
-    const matchmaker = new Matchmaker(create(), { ...mm, size: 2 }, async () => new Map());
-    await matchmaker.join('a', 1000, NOW);
+    const matchmaker = new Matchmaker('ranked', create(), { ...mm, size: 2 }, async () => ({
+      roomId: 'sala',
+      reservations: new Map(),
+    }));
+    await matchmaker.join('a', 1000, 0, NOW);
     await matchmaker.leave('a');
-    await matchmaker.join('b', 1000, NOW);
+    await matchmaker.join('b', 1000, 0, NOW);
     expect(await matchmaker.tick(NOW)).toBe(0);
     expect((await matchmaker.status('a')).state).toBe('idle');
+  });
+});
+
+describe('pareamento por habilidade e incerteza', () => {
+  const casual = { ...config.matchmaking.casual };
+
+  it('quem o sistema ainda conhece pouco aceita uma diferença maior', () => {
+    const base = { ...config.matchmaking.ranked };
+    expect(bandFor(0, base, 833)).toBeGreaterThan(bandFor(0, base, 200));
+    expect(bandFor(0, base, 0)).toBe(base.baseBand);
+  });
+
+  it('veterano e novato distantes não caem juntos logo de cara', () => {
+    const base = { ...config.matchmaking.ranked, size: 2 };
+    const veteran = ticket('vet', 3400, 0, 150);
+    const rookie = ticket('novo', 2500, 0, 833);
+    expect(formMatches([veteran, rookie], NOW, base)).toEqual([]);
+  });
+
+  it('no Casual, sozinho na fila, a partida sai em poucos segundos (os bots completam)', () => {
+    const alone = [ticket('a', 2500, casual.shortAfterSeconds - 1)];
+    expect(formMatches(alone, NOW, casual)).toEqual([]);
+    const waited = [ticket('a', 2500, casual.shortAfterSeconds)];
+    expect(formMatches(waited, NOW, casual)).toHaveLength(1);
+  });
+
+  it('no Casual, quem está perto em habilidade entra na mesma corrida', () => {
+    const tickets = [
+      ticket('a', 2500, casual.shortAfterSeconds),
+      ticket('b', 2600, 1),
+      ticket('longe', 4200, 1, 100),
+    ];
+    const [group] = formMatches(tickets, NOW, casual);
+    expect(group?.map((entry) => entry.userId).sort()).toEqual(['a', 'b']);
+    expect(skillSpread(group ?? [])).toBe(100);
+  });
+
+  it('no Casual os bots entram na conta e só o humano muda de habilidade', () => {
+    const human = { userId: 'u', skill: rating() };
+    const bot = { userId: null, skill: { mu: 25, sigma: 1.5 } };
+    const won = rateWithBots([human, bot, bot]);
+    const lost = rateWithBots([bot, bot, human]);
+    expect([...won.keys()]).toEqual(['u']);
+    expect(won.get('u')!.mu).toBeGreaterThan(25);
+    expect(lost.get('u')!.mu).toBeLessThan(25);
   });
 });

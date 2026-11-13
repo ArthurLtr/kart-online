@@ -17,16 +17,24 @@ model User {
   birthDate    DateTime? @db.Date
   createdAt    DateTime  @default(now())
 
-  profile   Profile?
-  ratings   Rating[]
-  results   MatchResult[]
-  inventory Inventory[]
-  loadout   EquippedLoadout?
+  profile     Profile?
+  ratings     Rating[]
+  casualSkill CasualSkill?
+  results     MatchResult[]
+  stats       PlayerStats[]
+  records     TrackRecord[]
+  tickets     MatchmakingTicket[]
+  inventory   Inventory[]
+  loadout     EquippedLoadout?
 }
 
 model Profile {
   userId   String @id
   nickname String
+  /// Experiência acumulada na carreira (nunca diminui). O nível é derivado dela.
+  xp       Int    @default(0)
+  /// Nível atual, guardado para ordenar e consultar sem recalcular.
+  level    Int    @default(1)
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -58,36 +66,77 @@ model Rating {
   @@index([seasonId, points])
 }
 
+/// Habilidade no Casual (OpenSkill). Não aparece para o jogador nem zera na
+/// temporada: serve só para parear e para escolher o nível dos bots.
+model CasualSkill {
+  userId    String   @id
+  mu        Float
+  sigma     Float
+  matches   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Uma corrida online terminada (Casual, Ranqueado ou Sala privada).
 model Match {
-  id       String   @id @default(cuid())
-  mode     String
-  track    String
-  laps     Int
-  seasonId String?
-  endedAt  DateTime @default(now())
-  season   Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  id            String    @id @default(cuid())
+  /// "casual", "ranked" ou "private".
+  mode          String
+  track         String
+  laps          Int
+  seasonId      String?
+  /// Sala do Colyseus em que a corrida aconteceu.
+  roomId        String?
+  /// Verdadeiro quando a sala foi montada pela fila (pareamento por habilidade).
+  matched       Boolean   @default(false)
+  startedAt     DateTime?
+  endedAt       DateTime  @default(now())
+  /// Duração da prova em ticks de simulação (60 por segundo).
+  durationTicks Int?
+  humans        Int       @default(0)
+  bots          Int       @default(0)
+  /// Habilidade média (mu) dos humanos com conta e a distância entre o melhor e o pior.
+  avgSkill      Float?
+  skillSpread   Float?
+  /// Nível dos bots (0 a 1) escolhido para esta corrida.
+  botSkill      Float?
+  season        Season?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
 
   results MatchResult[]
+  tickets MatchmakingTicket[]
+
+  @@index([mode, endedAt])
+  @@index([roomId])
 }
 
 model MatchResult {
-  id           String  @id @default(cuid())
-  matchId      String
+  id             String  @id @default(cuid())
+  matchId        String
   /// Nulo para bots e para quem jogou sem conta.
-  userId       String?
-  name         String
-  isBot        Boolean
-  slot         Int
-  position     Int
-  finished     Boolean
-  abandoned    Boolean @default(false)
-  timeTicks    Int?
-  bestLapTicks Int?
-  penaltyTicks Int     @default(0)
+  userId         String?
+  name           String
+  isBot          Boolean
+  slot           Int
+  position       Int
+  finished       Boolean
+  abandoned      Boolean @default(false)
+  timeTicks      Int?
+  bestLapTicks   Int?
+  penaltyTicks   Int     @default(0)
   /// Variação dos pontos de ranqueada nesta partida.
-  pointsDelta  Int?
-  match        Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user         User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  pointsDelta    Int?
+  /// Habilidade (OpenSkill) antes e depois: do Ranqueado ou do Casual, conforme o modo.
+  muBefore       Float?
+  sigmaBefore    Float?
+  muAfter        Float?
+  sigmaAfter     Float?
+  /// Divisão exibida antes e depois (só Ranqueado; nulo em posicionamento).
+  divisionBefore String?
+  divisionAfter  String?
+  /// Experiência ganha nesta corrida.
+  xpGained       Int     @default(0)
+  match          Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user           User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   laps LapTime[]
 
@@ -103,6 +152,67 @@ model LapTime {
   result   MatchResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
 
   @@index([resultId])
+}
+
+/// Carreira de um jogador em cada modo ("casual", "ranked", "private").
+model PlayerStats {
+  userId       String
+  mode         String
+  matches      Int      @default(0)
+  wins         Int      @default(0)
+  podiums      Int      @default(0)
+  finishes     Int      @default(0)
+  abandons     Int      @default(0)
+  /// Soma das posições de chegada, para a média.
+  positionSum  Int      @default(0)
+  bestLapTicks Int?
+  totalTicks   Int      @default(0)
+  lastPlayedAt DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, mode])
+}
+
+/// Melhores marcas de um jogador em cada pista (só corridas online).
+model TrackRecord {
+  userId        String
+  track         String
+  bestLapTicks  Int?
+  bestRaceTicks Int?
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, track])
+  @@index([track, bestLapTicks])
+}
+
+/// Passagem de um jogador pela fila de pareamento: serve para medir espera e
+/// equilíbrio das partidas. A fila viva mora no Redis (ou na memória).
+model MatchmakingTicket {
+  id          String    @id @default(cuid())
+  userId      String
+  /// "casual" ou "ranked".
+  queue       String
+  /// Habilidade (mu × 100) e incerteza (sigma × 100) ao entrar.
+  skill       Int
+  uncertainty Int       @default(0)
+  joinedAt    DateTime  @default(now())
+  /// Preenchido quando a passagem termina.
+  closedAt    DateTime?
+  /// "waiting", "matched" ou "left".
+  outcome     String    @default("waiting")
+  waitedMs    Int?
+  /// Faixa de habilidade aceita no momento em que a partida saiu.
+  band        Int?
+  /// Sala criada para a partida e a corrida gravada nela.
+  roomId      String?
+  matchId     String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match       Match?    @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  @@index([userId, joinedAt])
+  @@index([queue, outcome])
+  @@index([roomId])
 }
 
 /// Catálogo de cosméticos que precisam ser possuídos. Id = "slot:chave".

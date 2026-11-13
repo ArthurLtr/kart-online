@@ -188,11 +188,36 @@ describe('física do kart', () => {
     for (let i = 0; i < SIM_HZ * 2; i++) {
       state = step(state, NO_INPUT, SIM_DT, environment);
       impact = Math.max(impact, state.impact);
-      expect(Math.abs(state.d)).toBeLessThanOrEqual(16 - TUNING.halfWidth + 1e-6);
+      expect(Math.abs(state.d)).toBeLessThanOrEqual(16 - TUNING.wallMinGap + 1e-6);
     }
     expect(impact).toBeGreaterThan(3);
     expect(state.s).toBeGreaterThan(70); // continuou andando para a frente
     expect(speedOf(state)).toBeGreaterThan(3);
+  });
+});
+
+describe('parede com o contorno do kart (Rapier)', () => {
+  it('raspando de lado, o kart fica a meia largura do trilho, não só o eixo', () => {
+    const start = pointOnTrack(60, 13);
+    let state: KartState = { ...start, heading: start.heading - 0.12, vx: 18, tireTemp: 1 };
+    let closest = 0;
+    for (let i = 0; i < SIM_HZ * 2; i++) {
+      state = step(state, NO_INPUT, SIM_DT, environment);
+      closest = Math.max(closest, Math.abs(state.d));
+    }
+    // A rede de segurança deixaria chegar a 16 − wallMinGap; o contorno para antes.
+    expect(closest).toBeLessThan(16 - TUNING.bodyHalfWidth + 0.12);
+    expect(closest).toBeGreaterThan(16 - TUNING.bodyHalfWidth - 0.4);
+  });
+
+  it('o mesmo estado e as mesmas entradas dão o mesmo resultado, bit a bit', () => {
+    const run = (): KartState => {
+      const start = pointOnTrack(60, 12);
+      let state: KartState = { ...start, heading: start.heading - 0.5, vx: 22, tireTemp: 1 };
+      for (let i = 0; i < SIM_HZ; i++) state = step(state, NO_INPUT, SIM_DT, environment);
+      return state;
+    };
+    expect(run()).toEqual(run());
   });
 });
 
@@ -209,7 +234,7 @@ function pointOnTrack(s: number, d: number): KartState {
 describe('colisão entre karts', () => {
   it('separa os karts e troca velocidade com impulso limitado', () => {
     const behind = { ...createKartState(0, 0, 0), vx: 20, tireTemp: 1 };
-    const ahead = { ...createKartState(0, 1.9, 0), vx: 5, tireTemp: 1 };
+    const ahead = { ...createKartState(0, 1.7, 0), vx: 5, tireTemp: 1 };
     const [a, b] = resolveKartCollisions([behind, ahead]) as [KartState, KartState];
     expect(b.z - a.z).toBeGreaterThan(ahead.z - behind.z); // desencostaram
     expect(a.vx).toBeLessThan(20);
@@ -218,6 +243,22 @@ describe('colisão entre karts', () => {
     expect(a.vx + b.vx).toBeCloseTo(25, 6); // a quantidade de movimento se conserva
     expect(a.impact).toBeGreaterThan(0);
     expect(behind.vx).toBe(20); // entrada intacta
+  });
+
+  it('toque fora do centro gira os dois karts (no mesmo sentido, como numa batida real)', () => {
+    const behind = { ...createKartState(0.5, 0, 0), vx: 20, tireTemp: 1 };
+    const ahead = { ...createKartState(0, 1.7, 0), vx: 5, tireTemp: 1 };
+    const [a, b] = resolveKartCollisions([behind, ahead]) as [KartState, KartState];
+    expect(Math.abs(a.yawRate)).toBeGreaterThan(0.01);
+    expect(Math.sign(a.yawRate)).toBe(Math.sign(b.yawRate));
+  });
+
+  it('lado a lado na largura do kart não é batida', () => {
+    const karts = [
+      createKartState(0, 0, 0),
+      createKartState(2 * TUNING.bodyHalfWidth + 0.02, 0, 0),
+    ];
+    expect(resolveKartCollisions(karts)).toEqual(karts);
   });
 
   it('não mexe em karts afastados', () => {

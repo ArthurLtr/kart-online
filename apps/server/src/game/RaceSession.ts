@@ -46,8 +46,10 @@ export interface SessionOptions {
   podiumSeconds?: number;
   /** Depois que o primeiro termina, quanto os outros ainda têm para chegar, s. */
   finishGraceSeconds?: number;
-  /** Humanos necessários para o lobby começar a contar (Ranqueado espera todos). */
+  /** Humanos necessários para o lobby começar a contar (sala de fila espera todos). */
   minPlayers?: number;
+  /** Nível médio dos bots, 0 a 1 (ausente = grid variado, para sala sem pareamento). */
+  botSkill?: number;
 }
 
 /** O que a sala grava no banco quando a corrida acaba. */
@@ -57,6 +59,8 @@ export interface MatchReportEntry extends ResultEntry {
   abandoned: boolean;
   /** Tempo de cada volta completada, em ticks. */
   laps: number[];
+  /** Nível do bot, 0 a 1; `null` para humano. */
+  botSkill: number | null;
 }
 
 interface Seat {
@@ -119,7 +123,8 @@ export class RaceSession {
 
   private seats: Seat[] = [];
   private readonly environment: SimEnvironment;
-  private readonly options: Required<SessionOptions>;
+  private readonly options: Required<Omit<SessionOptions, 'botSkill'>> &
+    Pick<SessionOptions, 'botSkill'>;
   private accumulator = 0;
   private phaseSeconds = 0;
   private firstFinishTick: number | null = null;
@@ -273,7 +278,14 @@ export class RaceSession {
     // No Casual os bots completam o grid; nas outras salas correm só os humanos.
     if (this.options.mode === 'casual') {
       for (let i = 0; this.seats.length < MAX_KARTS; i++) {
-        const skill = 0.35 + ((i * 37 + this.raceCount * 11) % 60) / 100;
+        // Variação determinística entre os bots, para o grid não andar em bloco.
+        const spread = ((i * 37 + this.raceCount * 11) % 60) / 100;
+        const level = this.options.botSkill;
+        // Com pareamento, os bots ficam em volta do nível do grupo (±0,12).
+        const skill =
+          level === undefined
+            ? 0.35 + spread
+            : Math.min(1, Math.max(0, level + (spread - 0.3) * 0.4));
         this.seats.push({
           id: `bot:${i}`,
           name: BOT_NAMES[i % BOT_NAMES.length] as string,
@@ -405,6 +417,7 @@ export class RaceSession {
         userId: seat.userId,
         abandoned: gone(slot),
         laps: [...seat.laps],
+        botSkill: seat.bot ? (seat.plan?.skill ?? null) : null,
         slot,
         name: seat.name,
         bot: seat.bot,

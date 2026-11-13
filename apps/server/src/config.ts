@@ -27,22 +27,40 @@ export const config = {
   adminKey: env.ADMIN_KEY,
   seasonName: env.SEASON_NAME ?? 'Temporada 1',
   seasonDays: number('SEASON_DAYS', 90),
+  /**
+   * Pareamento, por fila. A habilidade é o mu do OpenSkill × 100 (um jogador
+   * novo começa em 2500; uma divisão do Ranqueado vale uns 500).
+   */
   matchmaking: {
-    /** Karts por partida ranqueada. */
-    size: number('RANKED_PLAYERS', 9),
-    /** Depois de `shortAfterSeconds` de espera, a partida sai com pelo menos isto. */
-    minPlayers: number('RANKED_MIN_PLAYERS', 2),
-    /** Diferença de pontos aceita no começo da espera. */
-    baseBand: number('MM_BASE_BAND', 200),
-    /** A faixa começa a crescer depois deste tempo. */
-    widenAfterSeconds: number('MM_WIDEN_AFTER', 30),
-    /** Quanto a faixa cresce a cada 10 s depois disso. */
-    widenStep: number('MM_WIDEN_STEP', 150),
-    shortAfterSeconds: number('MM_SHORT_AFTER', 60),
+    ranked: {
+      /** Humanos por partida. */
+      size: number('RANKED_PLAYERS', 9),
+      /** Depois de `shortAfterSeconds` de espera, a partida sai com pelo menos isto. */
+      minPlayers: number('RANKED_MIN_PLAYERS', 2),
+      /** Diferença de habilidade aceita no começo da espera. */
+      baseBand: number('MM_BASE_BAND', 200),
+      /** A faixa começa a crescer depois deste tempo. */
+      widenAfterSeconds: number('MM_WIDEN_AFTER', 30),
+      /** Quanto a faixa cresce a cada 10 s depois disso. */
+      widenStep: number('MM_WIDEN_STEP', 150),
+      /** Quanto da incerteza (sigma × 100) soma à faixa: jogador novo pareia mais largo. */
+      uncertaintyBand: number('MM_UNCERTAINTY_BAND', 0.35),
+      shortAfterSeconds: number('MM_SHORT_AFTER', 60),
+    },
+    /** No Casual a espera é curta: quem estiver por perto entra junto e os bots completam o grid. */
+    casual: {
+      size: number('CASUAL_PLAYERS', 9),
+      minPlayers: 1,
+      baseBand: number('MM_CASUAL_BASE_BAND', 350),
+      widenAfterSeconds: number('MM_CASUAL_WIDEN_AFTER', 2),
+      widenStep: number('MM_CASUAL_WIDEN_STEP', 400),
+      uncertaintyBand: number('MM_CASUAL_UNCERTAINTY_BAND', 0.5),
+      shortAfterSeconds: number('MM_CASUAL_SHORT_AFTER', 6),
+    },
   },
 };
 
-export type MatchmakingConfig = typeof config.matchmaking;
+export type MatchmakingConfig = typeof config.matchmaking.ranked;
 
 if (config.production && !env.AUTH_SECRET) {
   throw new Error('Defina AUTH_SECRET em produção.');

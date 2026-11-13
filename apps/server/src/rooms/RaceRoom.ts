@@ -22,11 +22,15 @@ const { Room } = colyseus;
 const RECONNECT_SECONDS = 30;
 /** Quanto a sala ranqueada espera quem a fila escolheu antes de largar sem ele. */
 const RANKED_WAIT_SECONDS = 30;
+/** No Casual a espera por quem a fila juntou Ã© curta. */
+const CASUAL_WAIT_SECONDS = 12;
 
 interface CreateOptions extends Partial<JoinOptions> {
   serverKey?: string;
   /** Bilhete de uso Ãºnico â†’ conta. SÃ³ o servidor preenche. */
   tickets?: Record<string, string>;
+  /** NÃ­vel dos bots escolhido pela fila (0 a 1). */
+  botSkill?: number;
 }
 type AuthOptions = Partial<JoinOptions> & { ticket?: string };
 const MODES: readonly RoomMode[] = ['casual', 'private', 'ranked'];
@@ -45,22 +49,28 @@ export class RaceRoom extends Room {
   private sentPaints = '';
   private mode: RoomMode = 'casual';
   private tickets = new Map<string, string>();
+  /** Sala montada pela fila: sÃ³ entra quem tem bilhete. */
+  private queued = false;
+  private raceStartedAt: Date | undefined;
 
   override onCreate(options: CreateOptions): void {
     const mode = MODES.includes(options.mode as RoomMode) ? (options.mode as RoomMode) : 'casual';
     this.mode = mode;
     const players = Object.keys(options.tickets ?? {}).length;
-    if (mode === 'ranked') {
-      // Sala ranqueada sÃ³ nasce da fila do prÃ³prio servidor.
-      const services = getServices();
-      if (!services || options.serverKey !== services.serverKey || players === 0) {
-        throw new Error('Sala ranqueada sÃ³ pode ser criada pela fila.');
-      }
+    const services = getServices();
+    const fromQueue = services !== null && options.serverKey === services.serverKey && players > 0;
+    // Sala ranqueada sÃ³ nasce da fila do prÃ³prio servidor; bilhetes de fora nÃ£o valem nada.
+    if (mode === 'ranked' && !fromQueue) {
+      throw new Error('Sala ranqueada sÃ³ pode ser criada pela fila.');
+    }
+    if (fromQueue && mode !== 'private') {
+      this.queued = true;
       this.tickets = new Map(Object.entries(options.tickets ?? {}));
       this.maxClients = players;
-      this.setSeatReservationTime(RANKED_WAIT_SECONDS);
+      const wait = mode === 'ranked' ? RANKED_WAIT_SECONDS : CASUAL_WAIT_SECONDS;
+      this.setSeatReservationTime(wait);
       void this.setPrivate(true);
-      this.clock.setTimeout(() => this.session.relaxMinPlayers(), RANKED_WAIT_SECONDS * 1000);
+      this.clock.setTimeout(() => this.session.relaxMinPlayers(), wait * 1000);
     }
     // Sala privada nÃ£o aparece no matchmaking: sÃ³ entra quem tem o cÃ³digo.
     if (mode === 'private') void this.setPrivate(true);
@@ -68,7 +78,12 @@ export class RaceRoom extends Room {
       mode,
       code: this.roomId,
       seed: Math.floor(Math.random() * 2 ** 31),
-      minPlayers: mode === 'ranked' ? players : 1,
+      minPlayers: this.queued ? players : 1,
+      ...(this.queued && typeof options.botSkill === 'number'
+        ? { botSkill: Math.min(1, Math.max(0, options.botSkill)) }
+        : {}),
+      // Quem veio da fila jÃ¡ esperou: o lobby Ã© sÃ³ o tempo de todos carregarem.
+      ...(this.queued && mode === 'casual' ? { lobbySeconds: 6 } : {}),
     });
 
     this.onMessage(MESSAGES.input, (client, message: unknown) => {
@@ -93,7 +108,7 @@ export class RaceRoom extends Room {
    */
   override async onAuth(_client: Client, options: AuthOptions): Promise<PlayerIdentity | true> {
     const services = getServices();
-    if (this.mode === 'ranked') {
+    if (this.queued) {
       const userId = this.tickets.get(String(options?.ticket));
       const player = userId ? await services?.accounts.player(userId) : null;
       if (!player) throw new Error('Bilhete de partida invÃ¡lido.');
@@ -162,9 +177,12 @@ export class RaceRoom extends Room {
       // Com a corrida rolando ninguÃ©m novo entra; no lobby a sala reabre.
       if (phase === 'results') this.saveMatch();
       // Partida ranqueada Ã© Ãºnica: acabou o pÃ³dio, todos voltam para a fila.
-      if (phase === 'lobby' && this.mode === 'ranked') void this.disconnect();
+      if (phase === 'lobby' && this.queued) void this.disconnect();
       else if (phase === 'lobby') void this.unlock();
-      else if (this.lastPhase === 'lobby') void this.lock();
+      else if (this.lastPhase === 'lobby') {
+        this.raceStartedAt = new Date();
+        void this.lock();
+      }
       this.lastPhase = phase;
       this.sendSnapshots();
       this.broadcastRoom();
@@ -185,6 +203,9 @@ export class RaceRoom extends Room {
       track: 'circuito-da-orla',
       laps: this.session.laps,
       report,
+      roomId: this.roomId,
+      matched: this.queued,
+      ...(this.raceStartedAt ? { startedAt: this.raceStartedAt } : {}),
     }).catch((error: unknown) =>
       console.error(`[sala ${this.roomId}] erro ao gravar partida`, error),
     );

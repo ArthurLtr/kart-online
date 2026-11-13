@@ -1,5 +1,7 @@
 import type { Surface, Track } from '../track/track.js';
 import { heightAt, projectToTrack } from '../track/track.js';
+import type { TrackWalls } from './physics.js';
+import { trackWalls } from './physics.js';
 
 /** Comandos de um kart num tick. É tudo o que o cliente envia ao servidor. */
 export interface KartInput {
@@ -75,6 +77,8 @@ export interface GroundSample {
 export interface SimEnvironment {
   /** `hint` é o índice de amostra anterior do kart (-1 se desconhecido). */
   sample(x: number, z: number, hint: number): GroundSample;
+  /** Guard-rails da pista como colisores do Rapier (ausente = sem paredes). */
+  walls?: TrackWalls;
 }
 
 /** Plano infinito de asfalto, sem paredes. Usado em testes de reta. */
@@ -99,6 +103,7 @@ export const FLAT_ENVIRONMENT: SimEnvironment = {
 export function createTrackEnvironment(track: Track): SimEnvironment {
   const paved = track.halfWidth + track.definition.curbWidth;
   return {
+    walls: trackWalls(track),
     sample(x, z, hint) {
       const projection = projectToTrack(track, x, z, hint >= 0 ? hint : undefined);
       const { index, s, d } = projection;

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import type { QueueKind } from '@kart/shared';
 import type { Accounts } from './accounts/accounts.js';
 import type { Matchmaker } from './ranked/matchmaking.js';
 
@@ -6,8 +7,9 @@ import type { Matchmaker } from './ranked/matchmaking.js';
 export interface Services {
   prisma: PrismaClient;
   accounts: Accounts;
-  matchmaker: Matchmaker;
-  /** Segredo do processo: só o próprio servidor consegue criar sala ranqueada. */
+  /** Uma fila de pareamento por modo. */
+  matchmakers: Record<QueueKind, Matchmaker>;
+  /** Segredo do processo: só o próprio servidor consegue criar sala de fila. */
   serverKey: string;
 }
 

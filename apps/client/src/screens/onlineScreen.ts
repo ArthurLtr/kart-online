@@ -20,7 +20,7 @@ import {
 } from '@kart/shared';
 import type { Loadout } from '../cosmetics/catalog';
 import { loadPaint, sanitizePaint } from '../cosmetics/paint';
-import type { QueueStatus } from '@kart/shared';
+import type { QueueKind, QueueStatus } from '@kart/shared';
 import { currentAccount, queue, refreshAccount, sessionToken } from '../net/account';
 import { btn, el } from '../ui/dom';
 import { block, field } from '../ui/sections';
@@ -162,12 +162,22 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     queueTimer = 0;
   };
 
-  /** Fila ranqueada: espera o servidor formar a partida e entra com a reserva. */
-  function startQueue(): void {
+  /**
+   * Fila de pareamento: o servidor junta pilotos de habilidade parecida e
+   * devolve a reserva de vaga. No Casual a espera é de poucos segundos e os
+   * bots completam o grid no nível do grupo.
+   */
+  function startQueue(kind: QueueKind, fallback?: () => void): void {
     audio.unlock();
     phase = 'connecting';
     clearPanel();
-    heading('Ranqueado', 'Na fila');
+    heading(
+      kind === 'ranked' ? 'Ranqueado' : 'Casual',
+      'Na fila',
+      kind === 'ranked'
+        ? 'Pilotos da sua faixa de habilidade. A faixa abre com a espera.'
+        : 'Juntando pilotos do seu nível. Os bots completam o grid.',
+    );
     const info = paragraph('Entrando na fila…', 'fila-estado');
     info.setAttribute('role', 'status');
     const actions = el('div', 'botoes');
@@ -179,14 +189,22 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     actions.append(leave);
     panel.append(actions);
     leave.focus({ preventScroll: true });
+    let entered = false;
     const fail = (erro: unknown): void => {
       stopQueue();
-      if (!disposed) showMenu(erro instanceof Error ? erro.message : 'Erro na fila.');
+      if (disposed) return;
+      // Fila fora do ar (servidor sem banco): o Casual ainda entra direto numa sala aberta.
+      if (!entered && fallback) fallback();
+      else showMenu(erro instanceof Error ? erro.message : 'Erro na fila.');
     };
     const onStatus = (status: QueueStatus): void => {
       if (disposed || phase !== 'connecting') return;
+      entered = true;
       if (status.state === 'waiting') {
-        info.textContent = `Procurando pilotos do seu nível… ${status.waitedSeconds} s · faixa de ±${status.band} pontos`;
+        info.textContent =
+          kind === 'ranked'
+            ? `Procurando pilotos do seu nível… ${status.waitedSeconds} s · faixa de ±${status.band}`
+            : `Procurando pilotos do seu nível… ${status.waitedSeconds} s`;
         if (!queueTimer) {
           queueTimer = window.setInterval(() => {
             queue.status().then(onStatus).catch(fail);
@@ -200,7 +218,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
         fail(new Error('Você saiu da fila.'));
       }
     };
-    queue.join().then(onStatus).catch(fail);
+    queue.join(kind).then(onStatus).catch(fail);
   }
 
   function showMenu(error = ''): void {
@@ -271,10 +289,21 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       modes.append(button);
       return button;
     };
-    const casual = mode('Casual', 'Entra agora. Bots completam o grid até 9.', () =>
-      join('casual'),
+    // Com conta, o Casual também pareia por habilidade; sem conta, entra numa sala aberta.
+    const playCasual = (): void => {
+      if (sessionToken()) startQueue('casual', () => join('casual'));
+      else join('casual');
+    };
+    const casual = mode(
+      'Casual',
+      account
+        ? 'Pilotos e bots do seu nível. Não vale pontos.'
+        : 'Entra agora. Bots completam o grid até 9.',
+      playCasual,
     );
-    mode('Ranqueado', 'Vale pontos na temporada. Exige conta com e-mail.', startQueue);
+    mode('Ranqueado', 'Vale pontos na temporada. Exige conta com e-mail.', () =>
+      startQueue('ranked'),
+    );
     mode('Sala privada', 'Cria uma sala e gera um código para chamar os amigos.', () =>
       join('private'),
     );
@@ -307,8 +336,8 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     // Veio do menu principal já com o modo escolhido: entra direto.
     const pending = intent;
     intent = null;
-    if (pending === 'casual') join('casual');
-    else if (pending === 'ranked') startQueue();
+    if (pending === 'casual') playCasual();
+    else if (pending === 'ranked') startQueue('ranked');
     else casual.focus({ preventScroll: true });
   }
 
@@ -426,8 +455,8 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       list.append(row);
     }
     panel.append(list);
-    if (message.mode === 'ranked') {
-      paragraph(ratingLine || 'Calculando seu rating…', 'rating');
+    if (sessionToken()) {
+      paragraph(ratingLine || 'Calculando sua experiência…', 'rating');
       if (!ratingAsked) {
         ratingAsked = true;
         // O servidor grava a partida logo depois do resultado; espera um instante e busca.
@@ -435,14 +464,21 @@ export function createOnlineScreen(context: AppContext): GameScreen {
           refreshAccount()
             .then((me) => {
               if (!me || disposed) return;
-              const delta = me.history[0]?.pointsDelta ?? null;
-              const change = delta === null ? '' : ` (${delta >= 0 ? '+' : '−'}${Math.abs(delta)})`;
-              const { rating } = me;
-              ratingLine =
-                `Rating: ${rating.points} pts${change} · ` +
-                (rating.division
-                  ? `Divisão ${rating.division}`
-                  : `posicionamento: faltam ${rating.placementLeft} partidas`);
+              const last = me.history[0];
+              const { rating, level } = me;
+              const progress =
+                level.needed > 0 ? ` (${level.into}/${level.needed} XP)` : ' (nível máximo)';
+              ratingLine = `+${last?.xp ?? 0} XP · Nível ${level.level}${progress}`;
+              if (message.mode === 'ranked') {
+                const delta = last?.pointsDelta ?? null;
+                const change =
+                  delta === null ? '' : ` (${delta >= 0 ? '+' : '−'}${Math.abs(delta)})`;
+                ratingLine +=
+                  ` · Rating ${rating.points} pts${change} · ` +
+                  (rating.division
+                    ? `Divisão ${rating.division}`
+                    : `posicionamento: faltam ${rating.placementLeft} partidas`);
+              }
               const line = panel.querySelector('.rating');
               if (line) line.textContent = ratingLine;
               updatePilot();

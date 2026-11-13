@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { ratingPoints } from '@kart/shared';
+import type { QueueKind } from '@kart/shared';
+import { skillNumber } from '@kart/shared';
 import { HttpError } from '../accounts/auth.js';
 import { config } from '../config.js';
 import type { Services } from '../services.js';
@@ -51,7 +52,7 @@ export function createApi(services: Services | null) {
 
   async function route(request: IncomingMessage, path: string): Promise<unknown> {
     if (!services) throw new HttpError(503, 'Contas indisponíveis: o servidor está sem banco.');
-    const { accounts, matchmaker } = services;
+    const { accounts, matchmakers } = services;
     const method = request.method ?? 'GET';
     const key = `${method} ${path}`;
     const bearer = request.headers.authorization?.replace(/^Bearer /, '');
@@ -81,20 +82,28 @@ export function createApi(services: Services | null) {
         return { ranking: await accounts.ranking() };
       case 'POST /api/queue/join': {
         const userId = user();
+        const queue: QueueKind = (await readJson(request)).queue === 'casual' ? 'casual' : 'ranked';
         const player = await accounts.player(userId);
         if (!player) throw new HttpError(401, 'Sessão inválida.');
-        if (player.guest) {
-          throw new HttpError(403, 'O Ranqueado exige conta com e-mail. Crie a sua na aba Conta.');
+        if (queue === 'ranked' && player.guest) {
+          throw new HttpError(403, 'O Ranqueado exige conta com e-mail. Crie a sua no Perfil.');
         }
-        const rating = await accounts.rating(userId, (await accounts.season()).id);
-        await matchmaker.join(userId, ratingPoints(rating.mu, rating.sigma));
-        return matchmaker.status(userId);
+        // Um jogador fica numa fila só.
+        await matchmakers[queue === 'casual' ? 'ranked' : 'casual'].leave(userId);
+        const skill = await accounts.queueSkill(userId, queue);
+        await matchmakers[queue].join(userId, skillNumber(skill.mu), skillNumber(skill.sigma));
+        return matchmakers[queue].status(userId);
       }
-      case 'POST /api/queue/leave':
-        await matchmaker.leave(user());
+      case 'POST /api/queue/leave': {
+        const userId = user();
+        await Promise.all([matchmakers.casual.leave(userId), matchmakers.ranked.leave(userId)]);
         return { ok: true };
-      case 'GET /api/queue/status':
-        return matchmaker.status(user());
+      }
+      case 'GET /api/queue/status': {
+        const userId = user();
+        const casual = await matchmakers.casual.status(userId);
+        return casual.state === 'idle' ? matchmakers.ranked.status(userId) : casual;
+      }
       case 'POST /api/admin/grant': {
         if (!config.adminKey || request.headers['x-admin-key'] !== config.adminKey) {
           throw new HttpError(403, 'Acesso negado.');

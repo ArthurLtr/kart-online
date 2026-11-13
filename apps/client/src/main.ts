@@ -1,3 +1,4 @@
+import { initPhysics } from '@kart/shared';
 import '@fontsource/barlow/latin-400.css';
 import '@fontsource/barlow/latin-600.css';
 import '@fontsource/barlow-condensed/latin-600.css';
@@ -115,7 +116,8 @@ const stopSettings = onSettingsChange((settings) => {
 
 window.addEventListener('resize', resize);
 window.addEventListener('hashchange', showFromHash);
-showFromHash();
+// O Rapier (colisões) é WASM: a primeira tela só abre depois de ele carregar.
+void initPhysics().then(showFromHash);
 void refreshAccount()
   .then(updatePilot)
   .catch(() => undefined); // servidor fora do ar: segue como visitante

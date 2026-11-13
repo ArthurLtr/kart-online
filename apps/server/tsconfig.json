@@ -8,5 +8,6 @@
     "types": ["node"],
     "sourceMap": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/testSetup.ts"]
 }

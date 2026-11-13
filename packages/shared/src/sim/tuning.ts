@@ -22,9 +22,16 @@ export const TUNING = {
   cgHeight: 0.22,
   /** Metade da largura usada na colisão com o guard-rail, m. */
   halfWidth: 0.65,
-  /** Cápsula de colisão kart-kart: meio comprimento do eixo e raio, m. */
-  capsuleHalfLength: 0.55,
-  capsuleRadius: 0.62,
+  /**
+   * Contorno de colisão (Rapier): retângulo de cantos arredondados, m.
+   * O centro fica `bodyCenter` à frente do eixo traseiro.
+   */
+  bodyHalfLength: 0.95,
+  bodyHalfWidth: 0.62,
+  bodyCorner: 0.2,
+  bodyCenter: 0.5,
+  /** Inércia de guinada usada nas batidas, kg·m². */
+  collisionYawInertia: 75,
   /** Esterço máximo das rodas dianteiras, rad (~24°). */
   maxSteer: 0.42,
 
@@ -114,6 +121,12 @@ export const TUNING = {
   kartRestitution: 0.3,
   /** Limite da troca de velocidade num toque, m/s ("resposta elástica limitada"). */
   kartMaxImpulseSpeed: 5,
+  /** Quanto do giro de um toque fora do centro é aplicado (1 = físico; menos = mais dócil). */
+  kartSpin: 0.45,
+  /** Quanto do giro de uma batida de bico na parede é aplicado. */
+  wallSpin: 0.25,
+  /** O eixo traseiro nunca passa mais perto do trilho do que isto, m (rede de segurança). */
+  wallMinGap: 0.3,
 } as const;
 
 /**

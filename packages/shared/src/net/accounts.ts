@@ -1,3 +1,4 @@
+import type { LevelView, QueueKind } from './progression.js';
 import type { Cosmetics, CustomPaint } from './protocol.js';
 import { sanitizeCosmetics, sanitizeCustomPaint } from './protocol.js';
 
@@ -139,13 +140,37 @@ export interface HistoryEntry {
   timeTicks: number | null;
   bestLapTicks: number | null;
   pointsDelta: number | null;
+  /** Experiência ganha na corrida. */
+  xp: number;
   endedAt: string;
+}
+
+/** Carreira num modo ("casual", "ranked" ou "private"). */
+export interface CareerStats {
+  mode: string;
+  matches: number;
+  wins: number;
+  podiums: number;
+  finishes: number;
+  /** Posição média de chegada (0 sem corridas). */
+  averagePosition: number;
+  bestLapTicks: number | null;
+}
+
+export interface TrackRecordView {
+  track: string;
+  bestLapTicks: number | null;
+  bestRaceTicks: number | null;
 }
 
 export interface MeResponse {
   user: AccountView;
   season: { name: string; endsAt: string };
   rating: RatingView;
+  /** Nível de carreira e experiência. */
+  level: LevelView;
+  stats: CareerStats[];
+  records: TrackRecordView[];
   /** Ids ("slot:chave") dos cosméticos possuídos. */
   inventory: string[];
   loadout: Cosmetics;
@@ -170,8 +195,10 @@ export interface RankingEntry {
 
 export interface QueueStatus {
   state: 'idle' | 'waiting' | 'matched';
+  /** Fila em que o jogador está (ou da partida formada). */
+  queue: QueueKind | null;
   waitedSeconds: number;
-  /** Faixa de pontos aceita no momento (cresce com a espera). */
+  /** Diferença de habilidade aceita no momento (cresce com a espera). */
   band: number;
   /** Reserva de vaga do Colyseus, quando a partida foi formada. */
   reservation: unknown;

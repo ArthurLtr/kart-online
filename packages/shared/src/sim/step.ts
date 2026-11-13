@@ -1,4 +1,5 @@
 import { SURFACES, TUNING as T } from './tuning.js';
+import { kartPose } from './physics.js';
 import type { GroundSample, KartInput, KartState, SimEnvironment } from './types.js';
 import { FLAT_ENVIRONMENT } from './types.js';
 
@@ -160,39 +161,80 @@ function integrate(k: KartState, input: KartInput, h: number, ground: GroundSamp
   );
 }
 
-/** Guard-rail: empurra o kart de volta e faz ele deslizar ao longo da parede. */
-function collideWithBarrier(k: KartState, ground: GroundSample): GroundSample {
-  const side = ground.d >= 0 ? 1 : -1;
-  const limit = (side === 1 ? ground.barrierRight : ground.barrierLeft) - T.halfWidth;
-  const penetration = Math.abs(ground.d) - limit;
-  if (!(penetration > 0)) return ground;
-
-  // Normal da parede apontando para fora da pista.
-  const nx = ground.rx * side;
-  const nz = ground.rz * side;
-  k.x -= nx * penetration;
-  k.z -= nz * penetration;
-
+/** Resposta a uma parede de normal `n` (apontando para a pista): quica pouco e desliza ao longo dela. */
+function hitWall(k: KartState, nx: number, nz: number, leverX: number, leverZ: number): void {
   const sinH = Math.sin(k.heading);
   const cosH = Math.cos(k.heading);
   let wx = k.vx * sinH + k.vy * cosH;
   let wz = k.vx * cosH - k.vy * sinH;
-  const into = wx * nx + wz * nz;
-  if (into > 0) {
-    // Tira a componente contra a parede (com um pouco de quique) e freia a que corre ao longo dela.
-    const along = wx * ground.fx + wz * ground.fz;
-    const keep = 1 - T.wallFriction * Math.min(1, into / 6);
-    const bounce = -into * T.wallRestitution;
-    wx = ground.fx * along * keep + nx * bounce;
-    wz = ground.fz * along * keep + nz * bounce;
-    k.vx = wx * sinH + wz * cosH;
-    k.vy = wx * cosH - wz * sinH;
-    k.yawRate *= 0.4;
-    // Alinha o bico com a parede, no sentido em que o kart já estava indo.
-    const tangent = Math.atan2(ground.fx, ground.fz) + (along >= 0 ? 0 : Math.PI);
-    k.heading = wrapAngle(k.heading + wrapAngle(tangent - k.heading) * T.wallAlign);
-    k.impact = Math.max(k.impact, into);
+  const into = -(wx * nx + wz * nz);
+  if (into <= 0) return;
+  // Tangente da parede, no sentido em que o kart já estava indo.
+  let tx = nz;
+  let tz = -nx;
+  let along = wx * tx + wz * tz;
+  if (along < 0) {
+    tx = -tx;
+    tz = -tz;
+    along = -along;
   }
+  // Tira a componente contra a parede (com um pouco de quique) e freia a que corre ao longo dela.
+  const keep = 1 - T.wallFriction * Math.min(1, into / 6);
+  const bounce = into * T.wallRestitution;
+  wx = tx * along * keep + nx * bounce;
+  wz = tz * along * keep + nz * bounce;
+  k.vx = wx * sinH + wz * cosH;
+  k.vy = wx * cosH - wz * sinH;
+  // Bater de bico gira o kart para longe da parede; depois o bico se alinha a ela.
+  const lever = leverZ * nx - leverX * nz;
+  k.yawRate =
+    k.yawRate * 0.4 +
+    ((lever * into * (1 + T.wallRestitution) * T.mass) / T.collisionYawInertia) * T.wallSpin;
+  const tangent = Math.atan2(tx, tz);
+  k.heading = wrapAngle(k.heading + wrapAngle(tangent - k.heading) * T.wallAlign);
+  k.impact = Math.max(k.impact, into);
+}
+
+/**
+ * Guard-rail. O Rapier acha em que trecho do trilho o contorno do kart afunda
+ * (posição, normal e sobreposição); o kart é empurrado de volta e desliza ao
+ * longo da parede. Por baixo fica uma rede de segurança pela distância à linha
+ * central, para o kart nunca atravessar o trilho, por mais rápido que venha.
+ */
+function collideWithBarrier(
+  k: KartState,
+  ground: GroundSample,
+  environment: SimEnvironment,
+): GroundSample {
+  const walls = environment.walls;
+  let moved = false;
+  if (walls) {
+    for (let pass = 0; pass < 3; pass++) {
+      const side = ground.d >= 0 ? 1 : -1;
+      const pose = kartPose(k);
+      const contact = walls.deepest(pose, -ground.rx * side, -ground.rz * side);
+      if (!contact) break;
+      const { nx, nz, depth, px, pz } = contact;
+      k.x += nx * depth;
+      k.z += nz * depth;
+      hitWall(k, nx, nz, px - pose.x, pz - pose.y);
+      moved = true;
+    }
+    if (moved) ground = environment.sample(k.x, k.z, ground.index);
+  }
+
+  const side = ground.d >= 0 ? 1 : -1;
+  const gap = walls ? T.wallMinGap : T.halfWidth;
+  const limit = (side === 1 ? ground.barrierRight : ground.barrierLeft) - gap;
+  const penetration = Math.abs(ground.d) - limit;
+  if (!(penetration > 0)) return ground;
+
+  // Normal da parede apontando para a pista.
+  const nx = -ground.rx * side;
+  const nz = -ground.rz * side;
+  k.x += nx * penetration;
+  k.z += nz * penetration;
+  hitWall(k, nx, nz, 0, 0);
   return { ...ground, d: side * limit };
 }
 
@@ -216,7 +258,7 @@ export function step(
     integrate(k, input, h, ground);
     ground = environment.sample(k.x, k.z, ground.index);
   }
-  ground = collideWithBarrier(k, ground);
+  ground = collideWithBarrier(k, ground, environment);
 
   k.y = ground.height;
   k.surface = ground.surface;

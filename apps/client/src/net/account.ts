@@ -3,6 +3,7 @@ import type {
   Cosmetics,
   CustomPaint,
   MeResponse,
+  QueueKind,
   QueueStatus,
   RankingEntry,
 } from '@kart/shared';
@@ -160,7 +161,8 @@ export const fetchRanking = async (): Promise<RankingEntry[]> =>
   (await request<{ ranking: RankingEntry[] }>('GET', '/api/ranking')).ranking;
 
 export const queue = {
-  join: (): Promise<QueueStatus> => request('POST', '/api/queue/join'),
+  join: (kind: QueueKind): Promise<QueueStatus> =>
+    request('POST', '/api/queue/join', { queue: kind }),
   status: (): Promise<QueueStatus> => request('GET', '/api/queue/status'),
   leave: (): Promise<unknown> => request('POST', '/api/queue/leave'),
 };

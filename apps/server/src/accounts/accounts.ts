@@ -6,11 +6,13 @@ import type {
   CustomPaint,
   MeResponse,
   PresetData,
+  QueueKind,
   RankingEntry,
 } from '@kart/shared';
 import {
   COSMETIC_ITEMS,
   filterOwnedCosmetics,
+  levelView,
   ratingView,
   sanitizeCosmetics,
   sanitizeCustomPaint,
@@ -29,7 +31,7 @@ import {
   verifyToken,
 } from './auth.js';
 
-type UserWithProfile = User & { profile: { nickname: string } | null };
+type UserWithProfile = User & { profile: { nickname: string; xp?: number } | null };
 
 /** Quem está entrando numa sala: identidade e visual vindos do banco, não do cliente. */
 export interface PlayerIdentity {
@@ -83,6 +85,22 @@ export class Accounts {
       create: { userId, seasonId, mu, sigma },
       update: {},
     });
+  }
+
+  /** Habilidade oculta do Casual (criada na primeira consulta). */
+  async casualSkill(userId: string): Promise<{ mu: number; sigma: number; matches: number }> {
+    const { mu, sigma } = newRating();
+    return this.prisma.casualSkill.upsert({
+      where: { userId },
+      create: { userId, mu, sigma },
+      update: {},
+    });
+  }
+
+  /** Habilidade usada pela fila de um modo. */
+  async queueSkill(userId: string, queue: QueueKind): Promise<{ mu: number; sigma: number }> {
+    if (queue === 'casual') return this.casualSkill(userId);
+    return this.rating(userId, (await this.season()).id);
   }
 
   private view(user: UserWithProfile): AccountView {
@@ -200,9 +218,11 @@ export class Accounts {
     });
     if (!user) throw new HttpError(401, 'Sessão inválida.');
     const season = await this.season();
-    const [rating, owned, results] = await Promise.all([
+    const [rating, owned, stats, records, results] = await Promise.all([
       this.rating(userId, season.id),
       this.owned(userId),
+      this.prisma.playerStats.findMany({ where: { userId } }),
+      this.prisma.trackRecord.findMany({ where: { userId } }),
       this.prisma.matchResult.findMany({
         where: { userId },
         orderBy: { match: { endedAt: 'desc' } },
@@ -215,6 +235,21 @@ export class Accounts {
       user: this.view(user),
       season: { name: season.name, endsAt: season.endsAt.toISOString() },
       rating: ratingView(rating.mu, rating.sigma, rating.matches),
+      level: levelView(user.profile?.xp ?? 0),
+      stats: stats.map((row) => ({
+        mode: row.mode,
+        matches: row.matches,
+        wins: row.wins,
+        podiums: row.podiums,
+        finishes: row.finishes,
+        averagePosition: row.matches > 0 ? row.positionSum / row.matches : 0,
+        bestLapTicks: row.bestLapTicks,
+      })),
+      records: records.map((row) => ({
+        track: row.track,
+        bestLapTicks: row.bestLapTicks,
+        bestRaceTicks: row.bestRaceTicks,
+      })),
       inventory: [...owned],
       loadout: stored.loadout,
       ...(stored.paint === undefined ? {} : { paint: stored.paint }),
@@ -226,6 +261,7 @@ export class Accounts {
         timeTicks: result.timeTicks,
         bestLapTicks: result.bestLapTicks,
         pointsDelta: result.pointsDelta,
+        xp: result.xpGained,
         endedAt: result.match.endedAt.toISOString(),
       })),
     };
