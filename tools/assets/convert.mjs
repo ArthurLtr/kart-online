@@ -14,6 +14,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { dedup, meshopt, prune, textureCompress } from '@gltf-transform/functions';
 import { MeshoptEncoder } from 'meshoptimizer';
 import sharp from 'sharp';
+import { convertCurrency } from './currency.mjs';
 
 const KART_LENGTH_M = 1.85; // igual a KART_LENGTH_M em @kart/shared
 const TEXTURE_SIZE = 2048;
@@ -229,7 +230,12 @@ async function convertTrees() {
 }
 
 // Sem argumentos converte tudo; "node convert.mjs gear trees" converte só o que for pedido.
-const STEPS = { kart: convertKart, gear: convertGear, trees: convertTrees };
+const STEPS = {
+  kart: convertKart,
+  gear: convertGear,
+  trees: convertTrees,
+  currency: () => convertCurrency(refs, join(root, 'apps/client/public/assets')),
+};
 const wanted = process.argv.slice(2);
 for (const [name, step] of Object.entries(STEPS)) {
   if (wanted.length === 0 || wanted.includes(name)) await step();

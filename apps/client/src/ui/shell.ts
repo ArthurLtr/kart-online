@@ -1,5 +1,5 @@
 import { currentAccount } from '../net/account';
-import { formatCoins, formatGems } from './buy';
+import { amountTag } from './currency';
 
 /** Casca de navegação: cartão do piloto no topo e dicas de atalho no rodapé. */
 
@@ -41,11 +41,17 @@ export function updatePilot(): void {
   let level = 'Entrar';
   if (me) {
     const { rating } = me;
-    const career = `Nv ${me.level.level} · ${formatCoins(me.coins)} · ${formatGems(me.gems)}`;
-    level = rating.division ? `${career} · ${rating.division}` : career;
+    level = rating.division ? `Nv ${me.level.level} · ${rating.division}` : `Nv ${me.level.level}`;
   }
   const text = span('piloto-texto', '');
-  text.append(span('piloto-nome', name), span('piloto-nivel', level));
+  const line = span('piloto-nivel', level);
+  if (me) {
+    // Saldo com os ícones oficiais da moeda e da gema.
+    const wallet = span('piloto-saldo', '');
+    wallet.append(amountTag('coin', me.coins), amountTag('gem', me.gems));
+    line.append(wallet);
+  }
+  text.append(span('piloto-nome', name), line);
   card.replaceChildren(span('piloto-sigla', me ? initials(name) : '?'), text);
 }
 

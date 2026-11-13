@@ -13,6 +13,15 @@ const GLB_URLS: Partial<Record<ModelId, string>> = {
   kart: '/assets/models/kart.glb',
 };
 
+/**
+ * Moeda e gema da economia (loja, compra, recompensa). Carregadas por
+ * `loadCurrencyModel`, com cache por URL; sem o arquivo, usa o modelo procedural.
+ */
+export const CURRENCY_GLB_URLS = {
+  coin: '/assets/currency/kart_coin.glb',
+  gem: '/assets/currency/turbo_gem.glb',
+} as const;
+
 export class GlbModelProvider implements ModelProvider {
   readonly name = 'glb';
   private readonly loader: GLTFLoader;

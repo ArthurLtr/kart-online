@@ -11,6 +11,7 @@ type Order = {
   id: string;
   status: OrderView['status'];
   gemsAmount: number;
+  coinsBonus: number;
   amountBrl: number;
   qrCode: string | null;
   qrCodeBase64: string | null;
@@ -21,6 +22,7 @@ const view = (order: Order): OrderView => ({
   orderId: order.id,
   status: order.status,
   gems: order.gemsAmount,
+  coins: order.coinsBonus,
   amountCents: order.amountBrl,
   qrCode: order.qrCode ?? '',
   qrCodeBase64: order.qrCodeBase64 ?? '',
@@ -67,6 +69,7 @@ export class GemStore {
         packageId: pack.id,
         amountBrl: pack.amountCents,
         gemsAmount: pack.gems,
+        coinsBonus: pack.coins,
         provider: provider.name,
         expiresAt,
       },
@@ -155,6 +158,15 @@ export class GemStore {
             referenceId: order.id,
           },
         });
+        if (order.coinsBonus > 0) {
+          await tx.profile.updateMany({
+            where: { userId: order.userId },
+            data: { coins: { increment: order.coinsBonus } },
+          });
+          await tx.coinEntry.create({
+            data: { userId: order.userId, amount: order.coinsBonus, reason: 'pix', ref: order.id },
+          });
+        }
         return 'paid' as const;
       });
     }
@@ -178,6 +190,20 @@ export class GemStore {
             referenceId: order.id,
           },
         });
+        if (order.coinsBonus > 0) {
+          await tx.profile.updateMany({
+            where: { userId: order.userId },
+            data: { coins: { decrement: order.coinsBonus } },
+          });
+          await tx.coinEntry.create({
+            data: {
+              userId: order.userId,
+              amount: -order.coinsBonus,
+              reason: 'refund',
+              ref: order.id,
+            },
+          });
+        }
         return 'refunded' as const;
       });
     }

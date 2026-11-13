@@ -1,6 +1,7 @@
 import type { Currency } from '@kart/shared';
 import { buyBlock, catalogItem, priceIn, rarityLabel } from '@kart/shared';
 import { currentAccount, purchaseItem } from '../net/account';
+import { amountTag, confirmPurchase, kindOf } from './currency';
 import { btn, el } from './dom';
 
 /** "1.250 moedas" (com o separador de milhar do português). */
@@ -65,14 +66,31 @@ export function buyButtons(itemId: string, options: BuyOptions): HTMLElement {
         : block === 'balance'
           ? `Faltam ${formatPrice(price - balance, currency)}`
           : `Comprar · ${formatPrice(price, currency)}`;
-    const button = btn(currency === 'gems' ? 'gema' : 'primario', label, () => {
+    const kind = kindOf(currency);
+    const button = btn(currency === 'gems' ? 'gema' : 'primario', '', () => {
       for (const other of buttons) other.disabled = true;
-      purchaseItem(itemId, currency)
-        .then(() => options.onBought(itemId))
+      void confirmPurchase({ itemName: item.name, rarityTag: rarityTag(itemId), price, currency })
+        .then((yes) => {
+          if (!yes) {
+            for (const other of buttons) other.disabled = other.dataset.bloqueado === 'true';
+            return;
+          }
+          return purchaseItem(itemId, currency).then(() => options.onBought(itemId));
+        })
         .catch((reason: unknown) => {
           options.onError(reason instanceof Error ? reason.message : 'Não consegui comprar.');
         });
     });
+    // Rótulo com o ícone oficial no lugar do nome da moeda.
+    button.append(
+      block === 'level'
+        ? `Nível ${item.unlockLevel} · `
+        : block === 'balance'
+          ? 'Faltam '
+          : 'Comprar · ',
+      amountTag(kind, block === 'balance' ? price - balance : price),
+    );
+    button.dataset.bloqueado = String(block !== null);
     button.disabled = block !== null;
     button.setAttribute(
       'aria-label',

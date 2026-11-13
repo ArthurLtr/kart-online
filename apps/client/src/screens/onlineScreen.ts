@@ -26,6 +26,7 @@ import { btn, el } from '../ui/dom';
 import { block, field } from '../ui/sections';
 import { updatePilot } from '../ui/shell';
 import { formatCoins } from '../ui/buy';
+import { burstToPilot } from '../ui/currency';
 import { getSettings } from '../settings';
 import { createNameTags } from '../ui/nameTags';
 import type { PlayIntent } from './menuScreen';
@@ -456,6 +457,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
               if (!me || disposed) return;
               const last = me.history[0];
               const { rating, level } = me;
+              if ((last?.coins ?? 0) > 0) burstToPilot('coin');
               const progress =
                 level.needed > 0 ? ` (${level.into}/${level.needed} XP)` : ' (nível máximo)';
               ratingLine =

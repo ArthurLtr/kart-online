@@ -1,7 +1,9 @@
 import type { OrderView } from '@kart/shared';
 import { formatBrl, GEM_PACKAGES } from '@kart/shared';
 import { createGemOrder, currentAccount, devPayOrder, fetchGemOrder } from '../net/account';
-import { formatGems } from '../ui/buy';
+import { formatCoins, formatGems } from '../ui/buy';
+import { amountTag, burstToPilot } from '../ui/currency';
+import { updatePilot } from '../ui/shell';
 import { btn, el } from '../ui/dom';
 import { block, stat } from '../ui/sections';
 
@@ -13,6 +15,8 @@ export interface GemStoreOptions {
 
 /** Intervalo entre as consultas do pedido enquanto o Pix não é pago. */
 const POLL_MS = 4000;
+
+const BADGES = { popular: 'Mais popular', best: 'Melhor valor' } as const;
 
 /**
  * Loja de gemas: escolhe um pacote, recebe o QR do Pix e espera a confirmação.
@@ -58,10 +62,21 @@ export function renderGemStore(body: HTMLElement, options: GemStoreOptions): () 
     }
     const list = el('ul', 'pacotes');
     for (const pack of GEM_PACKAGES) {
-      const row = el('li', 'pacote');
-      const text = el('span', 'pacote-texto');
-      text.append(el('strong', '', formatGems(pack.gems)), el('small', '', pack.name));
-      const buy = btn('gema', formatBrl(pack.amountCents), () => {
+      const card = el('li', 'pacote');
+      card.dataset.pacote = pack.art;
+      if (pack.badge) {
+        card.dataset.destaque = pack.badge;
+        card.append(el('span', 'pacote-selo', BADGES[pack.badge]));
+      }
+      const art = el('img', 'pacote-arte');
+      art.src = `/assets/currency/${pack.art}.webp`;
+      art.alt = '';
+      art.decoding = 'async';
+      const values = el('div', 'pacote-valores');
+      values.append(amountTag('gem', pack.gems));
+      const bonus = el('span', 'pacote-bonus');
+      bonus.append(amountTag('coin', pack.coins, '+'), el('small', '', 'de bônus'));
+      const buy = btn('gema', `Pix · ${formatBrl(pack.amountCents)}`, () => {
         for (const button of list.querySelectorAll('button')) button.disabled = true;
         options.setStatus('Gerando o Pix…');
         createGemOrder(pack.id)
@@ -76,19 +91,17 @@ export function renderGemStore(body: HTMLElement, options: GemStoreOptions): () 
       });
       buy.setAttribute(
         'aria-label',
-        `Comprar ${formatGems(pack.gems)} por ${formatBrl(pack.amountCents)} no Pix`,
+        `Comprar ${pack.name}: ${formatGems(pack.gems)} e ${formatCoins(pack.coins)} por ${formatBrl(pack.amountCents)} no Pix`,
       );
-      const cell = el('span', 'botoes');
-      cell.append(buy);
-      row.append(text, cell);
-      list.append(row);
+      card.append(art, el('h3', 'pacote-nome', pack.name), values, bonus, buy);
+      list.append(card);
     }
     area.append(
-      block('Pacotes de gemas', list),
+      list,
       el(
         'p',
         'nota',
-        'Pagamento por Pix. As gemas entram na conta assim que o banco confirma, em geral em segundos. Gemas compram itens épicos, lendários e exclusivos; nada do que se compra muda o desempenho do kart.',
+        'Pagamento por Pix. Gemas e moedas entram na conta assim que o banco confirma, em geral em segundos. Gemas compram itens épicos, lendários e exclusivos; nada do que se compra muda o desempenho do kart.',
       ),
     );
   }
@@ -97,7 +110,14 @@ export function renderGemStore(body: HTMLElement, options: GemStoreOptions): () 
     area.replaceChildren();
     if (order.status === 'PAID') {
       // O perfil já foi recarregado por quem trouxe o pedido pago.
-      options.setStatus(`${formatGems(order.gems)} na sua conta`);
+      options.setStatus(
+        order.coins > 0
+          ? `${formatGems(order.gems)} e ${formatCoins(order.coins)} na sua conta`
+          : `${formatGems(order.gems)} na sua conta`,
+      );
+      updatePilot();
+      burstToPilot('gem', area);
+      if (order.coins > 0) window.setTimeout(() => burstToPilot('coin', area), 260);
       options.onPaid();
       return;
     }
@@ -153,7 +173,7 @@ export function renderGemStore(body: HTMLElement, options: GemStoreOptions): () 
     });
     area.append(
       block(
-        `${formatGems(order.gems)} · ${formatBrl(order.amountCents)}`,
+        `${formatGems(order.gems)}${order.coins > 0 ? ` + ${formatCoins(order.coins)}` : ''} · ${formatBrl(order.amountCents)}`,
         image,
         el(
           'p',

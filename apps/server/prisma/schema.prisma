@@ -234,7 +234,7 @@ model CoinEntry {
   userId    String
   /// Positivo = ganhou; negativo = gastou.
   amount    Int
-  /// "welcome", "race", "level" ou "purchase".
+  /// "welcome", "race", "level", "purchase", "pix" ou "refund".
   reason    String
   /// Corrida ou item a que a movimentação se refere.
   ref       String?
@@ -275,6 +275,8 @@ model PaymentOrder {
   /// Valor em centavos de real.
   amountBrl    Int
   gemsAmount   Int
+  /// Moedas de bônus que vêm com o pacote.
+  coinsBonus   Int           @default(0)
   /// "mercadopago" (ou "fake" em desenvolvimento).
   provider     String
   /// Id da cobrança no provedor.

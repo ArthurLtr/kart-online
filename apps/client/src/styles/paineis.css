@@ -843,7 +843,8 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
   --epico: #c084fc;
   --lendario: #ffb020;
   --exclusivo: #ff5c8a;
-  --gema: #5eead4;
+  --gema: #00e5ff;
+  --moeda: #f5b041;
 }
 
 .raridade {
@@ -919,10 +920,10 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
   font-size: var(--t-s);
 }
 
-.botoes button.gema:not(:disabled) {
+button.gema:not(:disabled) {
   border-color: var(--gema);
   background: var(--gema);
-  color: #04201c;
+  color: #02232a;
 }
 
 .loja-item {
@@ -946,36 +947,83 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
 
 .pacotes {
   display: grid;
-  gap: var(--e1);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--e3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .pacote {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--e3);
-  padding: var(--e2) var(--e3);
+  justify-items: center;
+  align-content: start;
+  gap: var(--e2);
+  padding: var(--e4) var(--e3) var(--e3);
   border: 1px solid var(--linha);
-  border-left: 3px solid var(--gema);
+  border-radius: var(--raio-g);
+  background: radial-gradient(circle at 50% 30%, rgb(0 229 255 / 12%), transparent 65%),
+    var(--superficie-2);
+  text-align: center;
+}
+
+.pacote[data-destaque] {
+  border-color: var(--gema);
+  box-shadow: 0 0 0 1px var(--gema), 0 10px 30px rgb(0 229 255 / 14%);
+}
+
+.pacote[data-destaque='best'] {
+  border-color: var(--moeda);
+  box-shadow: 0 0 0 1px var(--moeda), 0 10px 30px rgb(245 176 65 / 16%);
+}
+
+.pacote-selo {
+  position: absolute;
+  top: -10px;
+  padding: 2px var(--e2);
   border-radius: var(--raio);
-  background: var(--superficie-2);
+  background: var(--gema);
+  color: #02232a;
+  font: 700 var(--t-xs) / 1.3 var(--fonte);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.pacote-texto {
-  display: grid;
+.pacote[data-destaque='best'] .pacote-selo {
+  background: var(--moeda);
+  color: #2a1a00;
 }
 
-.pacote-texto strong {
+.pacote-arte {
+  width: 100%;
+  max-width: 170px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgb(0 0 0 / 50%));
+}
+
+.pacote-nome {
+  margin: 0;
   font: italic 700 var(--t-l) / 1.1 var(--fonte-titulo);
   text-transform: uppercase;
 }
 
-.pacote-texto small {
-  color: var(--texto-3);
-  font-size: var(--t-xs);
+.pacote-valores .valor-moeda {
+  font: italic 700 var(--t-xl) / 1 var(--fonte-titulo);
+}
+
+.pacote-bonus {
+  display: flex;
+  align-items: center;
+  gap: var(--e1);
+  color: var(--texto-2);
+  font-size: var(--t-s);
+}
+
+.pacote > button {
+  width: 100%;
+  margin-top: var(--e1);
 }
 
 .pix-qr {
@@ -1003,4 +1051,101 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
 
 body[data-inicio='true'] :is(.abas, .piloto) {
   display: none;
+}
+
+/* --- ícones de moeda e gema ------------------------------------------------------------ */
+
+.valor-moeda {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.valor-moeda[data-moeda='coin'] {
+  color: var(--moeda);
+}
+
+.valor-moeda[data-moeda='gem'] {
+  color: var(--gema);
+}
+
+button .valor-moeda {
+  color: inherit;
+}
+
+.icone-moeda {
+  width: 1.35em;
+  height: 1.35em;
+  object-fit: contain;
+  flex: none;
+}
+
+.piloto-saldo {
+  display: inline-flex;
+  gap: var(--e2);
+  margin-left: var(--e2);
+  text-transform: none;
+}
+
+.moeda-voando {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgb(255 255 255 / 35%));
+}
+
+/* --- modal de confirmação de compra ------------------------------------------------------ */
+
+.modal-compra {
+  display: grid;
+  justify-items: center;
+  gap: var(--e2);
+  width: min(360px, calc(100vw - 32px));
+  padding: var(--e4) var(--e5) var(--e5);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio-g);
+  background: var(--superficie-solida);
+  color: var(--texto);
+  text-align: center;
+  box-shadow: var(--sombra);
+}
+
+.modal-compra::backdrop {
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(3px);
+}
+
+.modal-compra[data-moeda='coin'] {
+  border-top: 3px solid var(--moeda);
+}
+
+.modal-compra[data-moeda='gem'] {
+  border-top: 3px solid var(--gema);
+}
+
+.modal-compra h2 {
+  margin: 0;
+  font: italic 700 var(--t-xl) / 1.1 var(--fonte-titulo);
+  text-transform: uppercase;
+}
+
+.modal-compra-preco {
+  margin: calc(var(--e2) * -1) 0 0;
+  font: italic 700 var(--t-2xl) / 1 var(--fonte-titulo);
+}
+
+.modal-compra .botoes {
+  justify-content: center;
+  margin-top: var(--e2);
+}
+
+.moeda-3d {
+  display: block;
 }

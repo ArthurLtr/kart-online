@@ -265,14 +265,42 @@ export interface GemPackage {
   id: string;
   name: string;
   gems: number;
+  /** Moedas de bônus que vêm junto. */
+  coins: number;
   amountCents: number;
+  /** Arte do pacote em /assets/currency/<art>.webp. */
+  art: 'bundle_starter' | 'bundle_mid' | 'bundle_mega';
+  /** Selo de destaque na vitrine. */
+  badge?: 'popular' | 'best';
 }
 
 export const GEM_PACKAGES: readonly GemPackage[] = [
-  { id: 'gems-100', name: 'Punhado de gemas', gems: 100, amountCents: 490 },
-  { id: 'gems-550', name: 'Bolsa de gemas', gems: 550, amountCents: 2490 },
-  { id: 'gems-1200', name: 'Baú de gemas', gems: 1200, amountCents: 4990 },
-  { id: 'gems-2600', name: 'Cofre de gemas', gems: 2600, amountCents: 9990 },
+  {
+    id: 'bundle-starter',
+    name: 'Pacote Piloto Iniciante',
+    gems: 100,
+    coins: 500,
+    amountCents: 490,
+    art: 'bundle_starter',
+  },
+  {
+    id: 'bundle-mid',
+    name: 'Pacote Turbo Nitro',
+    gems: 550,
+    coins: 2500,
+    amountCents: 1990,
+    art: 'bundle_mid',
+    badge: 'popular',
+  },
+  {
+    id: 'bundle-mega',
+    name: 'Pacote Campeão de Box',
+    gems: 1300,
+    coins: 6000,
+    amountCents: 3990,
+    art: 'bundle_mega',
+    badge: 'best',
+  },
 ];
 
 export const gemPackage = (id: string): GemPackage | undefined =>
@@ -289,6 +317,8 @@ export interface OrderView {
   orderId: string;
   status: PaymentStatus;
   gems: number;
+  /** Moedas de bônus do pacote. */
+  coins: number;
   amountCents: number;
   /** Código "copia e cola" do Pix e a imagem do QR em base64 (PNG). */
   qrCode: string;
