@@ -48,7 +48,7 @@ const PITS = { x: 35, z: 26, length: 110, depth: 9, height: 4.6 };
 const TOWER = { x: -34, z: 25 };
 
 /** Arquibancada em degraus com cobertura curva e torcida instanciada. */
-function grandstand(): Group {
+function grandstand(density: number): Group {
   const group = new Group();
   group.name = 'grandstand';
   const { x0, length, front, steps, run, rise, base } = STAND;
@@ -148,7 +148,7 @@ function grandstand(): Group {
   let count = 0;
   for (let k = 0; k < steps; k++) {
     for (let i = 0; i < perRow; i++) {
-      if (random() < 0.18) continue; // lugares vazios
+      if (random() > 0.82 * density) continue; // lugares vazios
       dummy.position.set(
         x0 + 1 + i * seatSpacing + (random() - 0.5) * 0.12,
         base + k * rise + 0.45 + random() * 0.06,
@@ -244,7 +244,7 @@ function pitBuildings(): Group {
 }
 
 /** Árvores de copa arredondada espalhadas fora da pista (tronco e copa instanciados). */
-function trees(track: Track): Group {
+function trees(track: Track, density: number): Group {
   const group = new Group();
   group.name = 'trees';
   const random = createRandom(101);
@@ -260,7 +260,7 @@ function trees(track: Track): Group {
     const side = projection.d >= 0 ? 1 : -1;
     return Math.abs(projection.d) < barrierOffset(track, projection.s, side) + 5;
   };
-  for (let attempt = 0; attempt < 4000 && spots.length < 280; attempt++) {
+  for (let attempt = 0; attempt < 4000 && spots.length < Math.round(280 * density); attempt++) {
     const x = -330 + random() * 680;
     const z = SHORE_Z + random() * 330;
     if (!blocked(x, z)) spots.push({ x, z, scale: 0.75 + random() * 0.7 });
@@ -428,9 +428,16 @@ function signs(track: Track): Group {
   return group;
 }
 
-export function createScenery(track: Track): Group {
+/** `density` (0 a 1) é a fração de árvores e torcida, vinda do preset gráfico. */
+export function createScenery(track: Track, density = 1): Group {
   const group = new Group();
   group.name = 'scenery';
-  group.add(grandstand(), pitBuildings(), trees(track), lightPosts(track), signs(track));
+  group.add(
+    grandstand(density),
+    pitBuildings(),
+    trees(track, density),
+    lightPosts(track),
+    signs(track),
+  );
   return group;
 }

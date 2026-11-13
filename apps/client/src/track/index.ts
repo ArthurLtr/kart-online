@@ -20,14 +20,24 @@ export interface TrackScene {
  * largada, cenário e mar. Tudo procedural (a pasta referencias/ não tem modelo
  * nem imagem de pista), marcado como provisório no inventário.
  */
-export function createTrackScene(track: Track, sunDirection: Vector3): TrackScene {
+export function createTrackScene(
+  track: Track,
+  sunDirection: Vector3,
+  sceneryDensity = 1,
+): TrackScene {
   const group = new Group();
   group.name = 'track';
 
   const barriers = createBarriers(track);
   const gates = createCheckpointGates(track);
   const water = createWater(sunDirection);
-  group.add(createSurface(track), barriers.group, createScenery(track), water.mesh, gates);
+  group.add(
+    createSurface(track),
+    barriers.group,
+    createScenery(track, sceneryDensity),
+    water.mesh,
+    gates,
+  );
 
   // A pista é estática: congela as matrizes para não recalcular a cada quadro.
   group.updateMatrixWorld(true);

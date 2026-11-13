@@ -55,9 +55,27 @@ class SpeedBlurEffect extends Effect {
  * Cadeia: cena (HDR) → borrão de velocidade → bloom só em emissivos →
  * tone mapping ACES → vinheta → SMAA.
  */
-export function createPostFx(renderer: WebGLRenderer, scene: Scene, camera: Camera): PostFx {
+export function createPostFx(
+  renderer: WebGLRenderer,
+  scene: Scene,
+  camera: Camera,
+  level: 'basico' | 'completo' = 'completo',
+): PostFx {
   const composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType });
   composer.addPass(new RenderPass(scene, camera));
+
+  if (level === 'basico') {
+    // Preset Baixo: só o tone mapping, numa única passada de tela cheia.
+    composer.addPass(
+      new EffectPass(camera, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })),
+    );
+    return {
+      render: (deltaSeconds) => composer.render(deltaSeconds),
+      setSize: (width, height) => composer.setSize(width, height),
+      setMotionBlur() {},
+      dispose: () => composer.dispose(),
+    };
+  }
 
   const speedBlur = new SpeedBlurEffect();
   const blurPass = new EffectPass(camera, speedBlur);

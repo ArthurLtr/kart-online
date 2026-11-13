@@ -39,9 +39,9 @@ export function createTrainingScreen(context: AppContext): GameScreen {
   const view = new RaceView(context);
   const { track, environment, audio } = view;
   const controls = new Controls();
-  const hud = createHud(context.ui);
+  const hud = createHud(context.ui, track);
   hud.setHelp(
-    'W/↑ acelera · S/↓ freia e dá ré · A D/← → vira · Espaço drift · Shift olha para trás · R recomeça · P piloto automático · M som · B borrão',
+    'W/↑ acelera · S/↓ freia e dá ré · A D/← → vira · Espaço drift · Shift olha para trás · R recomeça · P piloto automático · M som · Esc menu',
   );
 
   let race: RaceState;
@@ -75,9 +75,8 @@ export function createTrainingScreen(context: AppContext): GameScreen {
     } else if (event.code === 'KeyP') {
       autopilot = !autopilot;
       hud.say(autopilot ? 'Piloto automático ligado' : 'Você no controle', 2, clock);
-    } else if (event.code === 'KeyB') {
-      view.blurEnabled = !view.blurEnabled;
-      hud.say(`Borrão de velocidade ${view.blurEnabled ? 'ligado' : 'desligado'}`, 1.5, clock);
+    } else if (event.code === 'Escape') {
+      window.location.hash = 'menu';
     }
   };
   const onPointerDown = (): void => audio.unlock();
@@ -192,6 +191,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
           rpm: kart.rpm,
           tireTemp: kart.tireTemp,
           offTrack: kart.surface === 'grass' || kart.surface === 'gravel',
+          dots: [{ x: kart.x, z: kart.z, own: true }],
         },
         time,
       );

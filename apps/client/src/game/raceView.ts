@@ -1,4 +1,4 @@
-import type { Group } from 'three';
+import type { Group, Mesh, Object3D } from 'three';
 import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import type { KartState, SimEnvironment, Track } from '@kart/shared';
 import { createTrackEnvironment, getCircuitoDaOrla, speedOf } from '@kart/shared';
@@ -16,6 +16,7 @@ import { setupLighting, SUN_DIRECTION } from '../render/lighting';
 import type { Sky } from '../render/sky';
 import { createSky } from '../render/sky';
 import type { AppContext } from '../screens/types';
+import { getSettings, quality } from '../settings';
 import type { TrackScene } from '../track';
 import { createTrackScene } from '../track';
 import { createPodium, PODIUM_POSITION, PODIUM_STEPS } from './podium';
@@ -38,6 +39,21 @@ interface Entry {
 }
 
 /**
+ * Peças pequenas dos karts adversários (parafusos, pedais, alavancas) deixam de
+ * projetar sombra: ninguém nota e cada uma custava um draw call na passada de sombra.
+ */
+function trimShadows(kart: Object3D, minRadius: number): void {
+  kart.traverse((node) => {
+    const mesh = node as Mesh;
+    if (!mesh.isMesh || !mesh.castShadow) return;
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    const scale = mesh.getWorldScale(SCALE).x;
+    if ((mesh.geometry.boundingSphere?.radius ?? 0) * scale < minRadius) mesh.castShadow = false;
+  });
+}
+const SCALE = new Vector3();
+
+/**
  * Tudo o que aparece numa corrida: pista, karts com piloto, efeitos, câmera de
  * perseguição, áudio e pódio. Não sabe de onde vêm os estados: o Treino usa a
  * simulação local e a corrida online usa predição + interpolação.
@@ -50,7 +66,7 @@ export class RaceView {
   readonly audio = new KartAudio();
   /** Borrão de velocidade pedido neste quadro (0 a 1). */
   motionBlur = 0;
-  blurEnabled = true;
+  blurEnabled = getSettings().motionBlur;
 
   private readonly lighting: Lighting;
   private readonly sky: Sky;
@@ -65,9 +81,10 @@ export class RaceView {
   private disposed = false;
 
   constructor(private readonly context: AppContext) {
-    this.lighting = setupLighting(this.scene, context.renderer);
+    const preset = quality();
+    this.lighting = setupLighting(this.scene, context.renderer, preset.shadowMap);
     this.sky = createSky(SUN_DIRECTION);
-    this.trackScene = createTrackScene(this.track, SUN_DIRECTION);
+    this.trackScene = createTrackScene(this.track, SUN_DIRECTION, preset.scenery);
     this.chase = new ChaseCamera(this.camera);
     this.scene.add(this.sky.mesh, this.trackScene.group, this.pool.group);
   }
@@ -87,6 +104,7 @@ export class RaceView {
       return;
     }
     this.entries = drivers.map((driver, i) => {
+      if (i !== focus) trimShadows(driver.kart, quality().shadowMinRadius);
       const effects = new KartEffects(driver.kart, this.pool, i === focus);
       const slot = this.track.grid[i];
       if (slot) {

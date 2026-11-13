@@ -17,7 +17,12 @@ export interface Lighting {
   dispose(): void;
 }
 
-export function setupLighting(scene: Scene, renderer: WebGLRenderer): Lighting {
+/** `shadowMapSize` é o lado do mapa de sombra em pixels; 0 desliga as sombras. */
+export function setupLighting(
+  scene: Scene,
+  renderer: WebGLRenderer,
+  shadowMapSize = 2048,
+): Lighting {
   const pmrem = new PMREMGenerator(renderer);
   const room = new RoomEnvironment();
   const environment = pmrem.fromScene(room, 0.04);
@@ -29,8 +34,8 @@ export function setupLighting(scene: Scene, renderer: WebGLRenderer): Lighting {
   scene.add(hemisphere);
 
   const sun = new DirectionalLight(0xffd2a1, 3.2);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = shadowMapSize > 0;
+  sun.shadow.mapSize.set(shadowMapSize || 512, shadowMapSize || 512);
   sun.shadow.camera.left = -SHADOW_HALF_SIZE;
   sun.shadow.camera.right = SHADOW_HALF_SIZE;
   sun.shadow.camera.top = SHADOW_HALF_SIZE;

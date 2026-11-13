@@ -1,4 +1,7 @@
+import type { Track } from '@kart/shared';
 import { SIM_HZ, TUNING } from '@kart/shared';
+import type { MinimapDot } from './minimap';
+import { createMinimap } from './minimap';
 
 /** 83,456 s → "1:23.456". */
 export function formatTime(ticks: number | null): string {
@@ -21,6 +24,8 @@ export interface HudData {
   rpm: number;
   tireTemp: number;
   offTrack: boolean;
+  /** Um ponto por kart no minimapa. */
+  dots: readonly MinimapDot[];
 }
 
 export interface Hud {
@@ -44,8 +49,8 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** HUD da corrida: posição, volta, tempos, velocímetro, conta-giros e pneus. */
-export function createHud(parent: HTMLElement): Hud {
+/** HUD da corrida: posição, volta, tempos, minimapa, velocímetro, conta-giros e pneus. */
+export function createHud(parent: HTMLElement, track: Track): Hud {
   const root = element('div', 'hud', parent);
   const timing = element('section', 'hud-tempos', root);
   timing.setAttribute('aria-label', 'Tempos');
@@ -54,6 +59,8 @@ export function createHud(parent: HTMLElement): Hud {
   const currentLabel = element('p', 'hud-tempo', timing);
   const lastLabel = element('p', '', timing);
   const bestLabel = element('p', '', timing);
+  const minimap = createMinimap(track);
+  root.append(minimap.element);
   const notice = element('p', 'hud-aviso', root);
   notice.setAttribute('role', 'status');
   const gauges = element('section', 'hud-painel', root);
@@ -62,6 +69,7 @@ export function createHud(parent: HTMLElement): Hud {
   element('span', 'hud-unidade', gauges, 'km/h');
   const revBar = element('div', 'hud-giro', gauges);
   const revFill = element('div', '', revBar);
+  const revLabel = element('p', 'hud-rpm', gauges);
   const tireLabel = element('p', 'hud-pneus', gauges);
   const help = element('p', 'hud-ajuda', root);
 
@@ -82,6 +90,8 @@ export function createHud(parent: HTMLElement): Hud {
       const rev = (data.rpm - TUNING.idleRpm) / (TUNING.maxRpm - TUNING.idleRpm);
       revFill.style.transform = `scaleX(${Math.min(1, Math.max(0, rev)).toFixed(3)})`;
       revFill.dataset.alto = String(rev > 0.9);
+      setText(revLabel, `${(Math.round(data.rpm / 100) / 10).toFixed(1)} × 1000 rpm`);
+      minimap.draw(data.dots);
       const cold = data.tireTemp < 0.85;
       setText(
         tireLabel,

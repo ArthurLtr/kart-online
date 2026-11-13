@@ -1,5 +1,6 @@
 import type { KartState } from '@kart/shared';
 import { speedOf, TUNING } from '@kart/shared';
+import { getSettings } from '../settings';
 
 /** Ruído branco em loop, base do pneu cantando, do vento e do piso solto. */
 function noiseBuffer(context: AudioContext): AudioBuffer {
@@ -36,7 +37,7 @@ export class KartAudio {
     this.context = context;
     this.noise = noiseBuffer(context);
     const master = context.createGain();
-    master.gain.value = this.muted ? 0 : 0.5;
+    master.gain.value = this.level();
     master.connect(context.destination);
     this.master = master;
 
@@ -145,10 +146,15 @@ export class KartAudio {
     oscillator.stop(now + length + 0.05);
   }
 
+  /** Volume geral das configurações (0,5 é o nível de mixagem original). */
+  private level(): number {
+    return this.muted ? 0 : 0.625 * getSettings().volume;
+  }
+
   toggleMute(): boolean {
     this.muted = !this.muted;
     if (this.master && this.context) {
-      this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.context.currentTime, 0.02);
+      this.master.gain.setTargetAtTime(this.level(), this.context.currentTime, 0.02);
     }
     return this.muted;
   }

@@ -508,3 +508,137 @@ body {
 .botoes button.bloqueado::after {
   content: ' 🔒';
 }
+
+/* --- Etapa 7: menu, configurações, minimapa e nomes ------------------------ */
+.menu {
+  position: absolute;
+  left: clamp(16px, 7vw, 96px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(320px, calc(100vw - 32px));
+  pointer-events: auto;
+}
+
+.menu-piloto {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.menu-botoes {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.menu-botoes[hidden] {
+  display: none;
+}
+
+.menu-botoes button {
+  padding: 14px 18px;
+  font-size: 1.1rem;
+  text-align: left;
+}
+
+.config {
+  pointer-events: auto;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgb(14 16 20 / 82%);
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  width: min(520px, calc(100vw - 32px));
+}
+
+.config h2 {
+  margin: 0 0 8px;
+}
+
+.config label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.config input[type='range'] {
+  flex: 1;
+}
+
+.config table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.config th {
+  text-align: left;
+  font-weight: 500;
+  padding: 4px 8px 4px 0;
+}
+
+.config td {
+  padding: 3px;
+}
+
+.config td button {
+  width: 100%;
+  min-width: 96px;
+}
+
+.config .nota {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.hud-minimapa {
+  position: absolute;
+  top: 78px;
+  right: 16px;
+  width: 168px;
+  height: 168px;
+  border-radius: 14px;
+  background: rgba(10, 12, 16, 0.45);
+}
+
+.hud-rpm {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+.nomes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nomes span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(10, 12, 16, 0.6);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.nomes span[hidden] {
+  display: none;
+}
+
+.online-painel .rating {
+  font-weight: 600;
+  color: #ffd23c;
+}
+
+/* Correndo, o cabeçalho encolhe para não cobrir a pista. */
+body[data-tela='treino'] .topo h1,
+body[data-tela='corrida'] .topo h1 {
+  font-size: 1rem;
+}

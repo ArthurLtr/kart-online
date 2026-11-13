@@ -2,15 +2,28 @@ import { Clock } from 'three';
 import { createModelProvider } from './models';
 import type { PostFx } from './render/postfx';
 import { createPostFx } from './render/postfx';
-import { createRenderer } from './render/renderer';
+import { applyRendererQuality, createRenderer } from './render/renderer';
 import { createAccountScreen } from './screens/accountScreen';
 import { createGarageScreen } from './screens/garageScreen';
+import { createMenuScreen } from './screens/menuScreen';
+import { createSettingsScreen } from './screens/settingsScreen';
 import { createOnlineScreen } from './screens/onlineScreen';
 import { createTrackScreen } from './screens/trackScreen';
 import { createTrainingScreen } from './screens/trainingScreen';
 import type { AppContext, GameScreen, ScreenFactory } from './screens/types';
+import {
+  getSettings,
+  gpuName,
+  isFirstRun,
+  onSettingsChange,
+  quality,
+  suggestQuality,
+  updateSettings,
+} from './settings';
 
 const SCREENS = {
+  menu: createMenuScreen,
+  config: createSettingsScreen,
   treino: createTrainingScreen,
   corrida: createOnlineScreen,
   pista: createTrackScreen,
@@ -25,6 +38,12 @@ const ui = document.querySelector<HTMLElement>('#tela-ui');
 if (!canvas || !status || !ui) throw new Error('index.html sem #cena, #status ou #tela-ui');
 
 const renderer = createRenderer(canvas);
+if (isFirstRun()) {
+  // Primeira visita: começa no preset sugerido para a placa de vídeo (sem gravar a escolha).
+  const gpu = gpuName(renderer.getContext());
+  updateSettings({ quality: suggestQuality(gpu, navigator.hardwareConcurrency ?? 4) }, false);
+  applyRendererQuality(renderer);
+}
 renderer.info.autoReset = false; // somamos os draw calls de todas as passadas do quadro
 
 const context: AppContext = {
@@ -55,8 +74,10 @@ function show(name: ScreenName): void {
   screen?.dispose();
   postfx?.dispose();
   screen = SCREENS[name](context);
-  postfx = createPostFx(renderer, screen.scene, screen.camera);
+  renderer.shadowMap.enabled = quality().shadowMap > 0;
+  postfx = createPostFx(renderer, screen.scene, screen.camera, quality().postfx);
   context.ui.dataset.tela = name;
+  document.body.dataset.tela = name;
   for (const tab of document.querySelectorAll<HTMLAnchorElement>('[data-tela-link]')) {
     if (tab.dataset.telaLink === name) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
@@ -70,8 +91,19 @@ function show(name: ScreenName): void {
 
 function showFromHash(): void {
   const name = window.location.hash.slice(1);
-  show(name in SCREENS ? (name as ScreenName) : 'treino');
+  show(name in SCREENS ? (name as ScreenName) : 'menu');
 }
+
+let appliedQuality = getSettings().quality;
+const stopSettings = onSettingsChange((settings) => {
+  if (settings.quality === appliedQuality || !screen) return;
+  // Trocou o preset: resolução e pós-processamento mudam na hora; sombras e cenário, na próxima tela.
+  appliedQuality = settings.quality;
+  applyRendererQuality(renderer);
+  postfx?.dispose();
+  postfx = createPostFx(renderer, screen.scene, screen.camera, quality().postfx);
+  resize();
+});
 
 window.addEventListener('resize', resize);
 window.addEventListener('hashchange', showFromHash);
@@ -90,6 +122,7 @@ import.meta.hot?.dispose(() => {
   renderer.setAnimationLoop(null);
   window.removeEventListener('resize', resize);
   window.removeEventListener('hashchange', showFromHash);
+  stopSettings();
   screen?.dispose();
   postfx?.dispose();
   context.models.dispose();

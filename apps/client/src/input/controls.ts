@@ -1,17 +1,7 @@
 import type { AssistSettings, RawInput } from '@kart/shared';
 import { GAMEPAD_ASSISTS, KEYBOARD_ASSISTS } from '@kart/shared';
-
-export type Action = 'throttle' | 'brake' | 'left' | 'right' | 'drift' | 'lookBack';
-
-/** Teclas de cada ação (KeyboardEvent.code). O remapeamento pela interface entra na etapa 7. */
-export const DEFAULT_KEYS: Record<Action, readonly string[]> = {
-  throttle: ['KeyW', 'ArrowUp'],
-  brake: ['KeyS', 'ArrowDown'],
-  left: ['KeyA', 'ArrowLeft'],
-  right: ['KeyD', 'ArrowRight'],
-  drift: ['Space'],
-  lookBack: ['ShiftLeft', 'ShiftRight'],
-};
+import type { Action, KeyMap } from '../settings';
+import { getSettings } from '../settings';
 
 /** Botões do gamepad no layout padrão (Gamepad API "standard"). */
 const PAD = { drift: 0, lookBack: 5, brake: 6, throttle: 7 } as const;
@@ -31,7 +21,7 @@ export class Controls {
   private readonly gameKeys: Set<string>;
   private device: 'keyboard' | 'gamepad' = 'keyboard';
 
-  constructor(private readonly keys: Record<Action, readonly string[]> = DEFAULT_KEYS) {
+  constructor(private readonly keys: KeyMap = getSettings().keys) {
     this.gameKeys = new Set(Object.values(keys).flat());
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);

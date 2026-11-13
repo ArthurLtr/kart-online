@@ -19,7 +19,11 @@ import {
 } from '@kart/shared';
 import type { Loadout } from '../cosmetics/catalog';
 import type { QueueStatus } from '@kart/shared';
-import { queue, sessionToken } from '../net/account';
+import { queue, refreshAccount, sessionToken } from '../net/account';
+import { getSettings } from '../settings';
+import { createNameTags } from '../ui/nameTags';
+import type { PlayIntent } from './menuScreen';
+import { takePlayIntent } from './menuScreen';
 import { CATALOG, DEFAULT_LOADOUT, loadLoadout, sampleLoadout } from '../cosmetics/catalog';
 import type { KartFrame } from '../game/raceView';
 import { RaceView } from '../game/raceView';
@@ -108,7 +112,13 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   const panel = document.createElement('section');
   panel.className = 'online-painel';
   panel.setAttribute('aria-live', 'polite');
-  const hud = createHud(ui);
+  const hud = createHud(ui, track);
+  const tags = createNameTags(ui);
+  const showTags = getSettings().nameTags;
+  /** Linha de rating do resultado ranqueado, buscada uma vez por partida. */
+  let ratingLine = '';
+  let ratingAsked = false;
+  let intent: PlayIntent | null = takePlayIntent();
   hud.setHelp(
     'W/↑ acelera · S/↓ freia · A D/← → vira · Espaço drift · Shift olha para trás · F3 rede',
   );
@@ -254,8 +264,12 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       if (codeInput.value.trim()) join('private', codeInput.value);
     });
     panel.append(codeRow);
-    paragraph('Ranqueado entra na etapa 6.', 'nota');
     context.setStatus('Corrida online · escolha um modo');
+    // Veio do menu principal já com o modo escolhido: entra direto.
+    const pending = intent;
+    intent = null;
+    if (pending === 'casual') join('casual');
+    else if (pending === 'ranked') startQueue();
   }
 
   function renderLobby(message: RoomMessage): void {
@@ -322,6 +336,30 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       for (const text of cells) row.insertCell().textContent = text;
     }
     panel.append(table);
+    if (message.mode === 'ranked') {
+      paragraph(ratingLine || 'Calculando seu rating…', 'rating');
+      if (!ratingAsked) {
+        ratingAsked = true;
+        // O servidor grava a partida logo depois do resultado; espera um instante e busca.
+        window.setTimeout(() => {
+          refreshAccount()
+            .then((me) => {
+              if (!me || disposed) return;
+              const delta = me.history[0]?.pointsDelta ?? null;
+              const change = delta === null ? '' : ` (${delta >= 0 ? '+' : '−'}${Math.abs(delta)})`;
+              const { rating } = me;
+              ratingLine =
+                `Rating: ${rating.points} pts${change} · ` +
+                (rating.division
+                  ? `Divisão ${rating.division}`
+                  : `posicionamento: faltam ${rating.placementLeft} partidas`);
+              const line = panel.querySelector('.rating');
+              if (line) line.textContent = ratingLine;
+            })
+            .catch(() => {});
+        }, 1500);
+      }
+    }
     paragraph(`Próxima etapa em ${message.secondsLeft ?? '–'} s.`, 'nota');
   }
 
@@ -346,6 +384,8 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       panel.hidden = true;
       const key = message.roster.map((entry) => `${entry.slot}:${entry.name}`).join('|');
       if (key !== rosterKey) {
+        ratingLine = '';
+        ratingAsked = false;
         // Grid definido (com os bots): monta os karts de todo mundo.
         rosterKey = key;
         lights = -1;
@@ -493,6 +533,18 @@ export function createOnlineScreen(context: AppContext): GameScreen {
         });
         const racing = latest.tick >= latest.goTick;
         view.render(delta, time, frames, current.you, controls.read().lookBack, racing);
+        if (showTags) {
+          tags.update(
+            frames.map((frame, slot) => ({
+              name: current.roster.find((entry) => entry.slot === slot)?.name ?? '',
+              x: frame.x,
+              y: frame.y,
+              z: frame.z,
+            })),
+            view.camera,
+            current.you,
+          );
+        }
 
         const progress = latest.progress[current.you];
         const own = predictor.state;
@@ -514,11 +566,17 @@ export function createOnlineScreen(context: AppContext): GameScreen {
               rpm: own.rpm,
               tireTemp: own.tireTemp,
               offTrack: own.surface === 'grass' || own.surface === 'gravel',
+              dots: frames.map((frame, slot) => ({
+                x: frame.x,
+                z: frame.z,
+                own: slot === current.you,
+              })),
             },
             time,
           );
         }
       } else {
+        tags.hide();
         view.renderIdle(delta, time);
       }
       screen.motionBlur = view.motionBlur;
@@ -541,6 +599,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       connection.close();
       controls.dispose();
       hud.dispose();
+      tags.dispose();
       debug.dispose();
       ui.replaceChildren();
       view.dispose();
