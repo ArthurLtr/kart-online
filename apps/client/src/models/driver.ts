@@ -1,6 +1,7 @@
 import type { Group } from 'three';
 import { applyLoadout } from '../cosmetics/apply';
 import type { Loadout } from '../cosmetics/catalog';
+import type { KartPaint } from '../cosmetics/paint';
 import { cockpitOf } from './cockpit';
 import { KartRig } from './kartRig';
 import type { ModelProvider } from './ModelProvider';
@@ -13,7 +14,7 @@ export interface Driver {
   pilot: PilotRig;
   loadout: Loadout;
   /** Troca os cosméticos (carrega outro capacete se o modelo mudou). */
-  setLoadout(loadout: Loadout): Promise<void>;
+  setLoadout(loadout: Loadout, paint?: KartPaint | null): Promise<void>;
   /**
    * @param dt segundos desde a última chamada
    * @param distance metros percorridos desde a última chamada
@@ -22,7 +23,11 @@ export interface Driver {
   update(dt: number, distance: number, steerAngle: number): void;
 }
 
-export async function createDriver(models: ModelProvider, loadout: Loadout): Promise<Driver> {
+export async function createDriver(
+  models: ModelProvider,
+  loadout: Loadout,
+  paint: KartPaint | null = null,
+): Promise<Driver> {
   const [kart, pilotRoot] = await Promise.all([models.load('kart'), models.load('pilot')]);
   const kartRig = new KartRig(kart);
   const pilot = new PilotRig(pilotRoot);
@@ -36,19 +41,19 @@ export async function createDriver(models: ModelProvider, loadout: Loadout): Pro
     kartRig,
     pilot,
     loadout,
-    async setLoadout(next) {
+    async setLoadout(next, nextPaint = null) {
       if (!helmet || helmet.userData.model !== next.helmetModel) {
         helmet = await models.load('helmet', next.helmetModel);
         pilot.attachHelmet(helmet);
       }
       driver.loadout = next;
-      applyLoadout({ kart, pilot, helmet }, next);
+      applyLoadout({ kart, pilot, helmet }, next, nextPaint);
     },
     update(dt, distance, steerAngle) {
       kartRig.update(distance, steerAngle);
       pilot.update(dt, steerAngle);
     },
   };
-  await driver.setLoadout(loadout);
+  await driver.setLoadout(loadout, paint);
   return driver;
 }

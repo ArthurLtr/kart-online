@@ -11,6 +11,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
     "@kart/shared": "workspace:*",
     "colyseus.js": "^0.15.26",
     "postprocessing": "^6.36.3",

@@ -4,24 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kart Online</title>
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/styles/index.css" />
   </head>
   <body>
     <canvas id="cena" aria-label="Cena 3D do jogo"></canvas>
     <div id="ui">
       <header class="topo">
-        <div>
-          <h1>Kart Online</h1>
-          <p id="status" role="status">Carregando…</p>
-        </div>
+        <h1 class="marca">
+          <span>Kart <b>Online</b></span>
+        </h1>
         <nav class="abas" aria-label="Telas">
-          <a href="#menu" data-tela-link="menu">Menu</a>
+          <a href="#menu" data-tela-link="menu">Início</a>
           <a href="#garagem" data-tela-link="garagem">Garagem</a>
           <a href="#conta" data-tela-link="conta">Perfil</a>
           <a href="#config" data-tela-link="config">Configurações</a>
         </nav>
+        <a class="piloto" id="piloto" href="#conta" aria-label="Perfil do piloto"></a>
       </header>
       <div id="tela-ui"></div>
+      <footer class="rodape">
+        <p id="status" role="status">Carregando…</p>
+        <ul class="dicas" id="dicas" aria-label="Atalhos"></ul>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

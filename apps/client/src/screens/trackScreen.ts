@@ -2,6 +2,7 @@ import { PerspectiveCamera, Scene, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getCircuitoDaOrla, pointAt } from '@kart/shared';
 import { loadLoadout, sampleLoadout } from '../cosmetics/catalog';
+import { loadPaint } from '../cosmetics/paint';
 import { createDriver } from '../models/driver';
 import { disposeTree } from '../render/dispose';
 import { setupLighting, SUN_DIRECTION } from '../render/lighting';
@@ -107,7 +108,13 @@ export function createTrackScreen(context: AppContext): GameScreen {
   // A pole usa o loadout aplicado na garagem; os outros variam para mostrar o catálogo.
   context.setStatus('Carregando karts…');
   Promise.all(
-    track.grid.map((_, i) => createDriver(models, i === 0 ? loadLoadout() : sampleLoadout(i))),
+    track.grid.map((_, i) =>
+      createDriver(
+        models,
+        i === 0 ? loadLoadout() : sampleLoadout(i),
+        i === 0 ? loadPaint() : null,
+      ),
+    ),
   )
     .then((drivers) => {
       if (disposed) return;

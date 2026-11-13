@@ -1,5 +1,10 @@
+import '@fontsource/barlow/latin-400.css';
+import '@fontsource/barlow/latin-600.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700-italic.css';
 import { Clock } from 'three';
 import { createModelProvider } from './models';
+import { refreshAccount } from './net/account';
 import type { PostFx } from './render/postfx';
 import { createPostFx } from './render/postfx';
 import { applyRendererQuality, createRenderer } from './render/renderer';
@@ -20,6 +25,7 @@ import {
   suggestQuality,
   updateSettings,
 } from './settings';
+import { setHints, updatePilot } from './ui/shell';
 
 const SCREENS = {
   menu: createMenuScreen,
@@ -73,6 +79,8 @@ function resize(): void {
 function show(name: ScreenName): void {
   screen?.dispose();
   postfx?.dispose();
+  setHints([]);
+  updatePilot();
   screen = SCREENS[name](context);
   renderer.shadowMap.enabled = quality().shadowMap > 0;
   postfx = createPostFx(renderer, screen.scene, screen.camera, quality().postfx);
@@ -108,6 +116,9 @@ const stopSettings = onSettingsChange((settings) => {
 window.addEventListener('resize', resize);
 window.addEventListener('hashchange', showFromHash);
 showFromHash();
+void refreshAccount()
+  .then(updatePilot)
+  .catch(() => undefined); // servidor fora do ar: segue como visitante
 
 const clock = new Clock();
 renderer.setAnimationLoop(() => {

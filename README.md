@@ -84,7 +84,7 @@ docs/             Inventário da pasta referencias/
 
 ## Como trocar um modelo procedural por GLB
 
-A cena nunca cria modelos diretamente: pede ao `ModelProvider` (`apps/client/src/models/`). O provider padrão tenta o GLB primeiro e cai no procedural se o arquivo não existir. Hoje o kart é GLB (convertido de `referencias/`); piloto e capacete são procedurais.
+A cena nunca cria modelos diretamente: pede ao `ModelProvider` (`apps/client/src/models/`). O provider padrão tenta o GLB primeiro e cai no procedural se o arquivo não existir. Hoje o kart é GLB (convertido de `referencias/`); piloto e capacete são procedurais, mas a bota e a luva do piloto (`pilot_gear.glb`) e as árvores da pista (`trees.glb`) também vêm de `referencias/`. `node tools/assets/convert.mjs gear trees` reconverte só essas peças.
 
 Para trocar, por exemplo, o piloto procedural por um modelo:
 
@@ -99,7 +99,8 @@ Para trocar, por exemplo, o piloto procedural por um modelo:
 
 ## Limitações conhecidas
 
-- A pista, o piloto e o capacete são procedurais porque `referencias/` não tem modelo dessas peças (motivos no inventário).
+- A pista, o corpo do piloto e o capacete são procedurais porque `referencias/` não tem modelo dessas peças (motivos no inventário). Bota, luva e árvores são modelos convertidos.
+- As licenças da bota, da luva e das árvores em `referencias/` também precisam ser confirmadas antes de uso público.
 - A licença do modelo do kart em `referencias/` precisa ser confirmada antes de qualquer uso público.
 - A fila em Redis foi testada com `ioredis-mock`, não com um Redis de verdade.
 - Texturas ainda não usam KTX2; o som é todo sintetizado em WebAudio (não há arquivos de áudio).

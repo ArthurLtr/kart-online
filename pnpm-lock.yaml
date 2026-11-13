@@ -44,6 +44,12 @@ importers:
 
   apps/client:
     dependencies:
+      '@fontsource/barlow':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/barlow-condensed':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@kart/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -538,6 +544,12 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@fontsource/barlow-condensed@5.3.0':
+    resolution: {integrity: sha512-RA7MmIx0v3eQ6Gcf74qLVLOwLB0GpPOzx+eU9iG/AmCnSJGcIWYeU8y6CEMGZ210MGwGg5CZhzLkkvyZdTTk1g==}
+
+  '@fontsource/barlow@5.3.0':
+    resolution: {integrity: sha512-tGR0y6QObRtKv71MOth44222+mdNFM/ZWFWDV1VLzNbG4oK9PNRlyJzmkck4vHAi9ibHBXgt4SlY51amFP55CA==}
 
   '@gamestdio/clock@1.1.9':
     resolution: {integrity: sha512-O+PG3aRRytgX2BhAPMIhbM2ftq1Q8G4xUrYjEWYM6EmpoKn8oY4lXENGhpgfww6mQxHPbjfWyIAR6Xj3y1+avw==}
@@ -3340,6 +3352,10 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@fontsource/barlow-condensed@5.3.0': {}
+
+  '@fontsource/barlow@5.3.0': {}
 
   '@gamestdio/clock@1.1.9': {}
 

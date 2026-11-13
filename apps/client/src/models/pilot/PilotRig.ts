@@ -1,7 +1,8 @@
 import type { BufferGeometry, Group, Mesh, Object3D } from 'three';
-import { Color, Quaternion, Vector3 } from 'three';
+import { Color, Matrix4, Vector3 } from 'three';
 import { BODY, buildLowerBody, PILOT_PARTS } from './createPilot';
 import type { LegPose } from './createPilot';
+import { pilotGear, SHOE_ANKLE_HEIGHT } from './gear';
 import { solveTwoBone } from './geometry';
 
 export type PilotPose = 'seated' | 'standing' | 'celebrate';
@@ -24,6 +25,9 @@ export interface Cockpit {
 }
 
 const UP = new Vector3(0, 1, 0);
+/** Do aro até o punho da luva modelada: para fora do aro e para trás, no eixo da direção. */
+const GRIP_OUT = 0.03;
+const GRIP_BACK = 0.105;
 const damp = (current: number, target: number, rate: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-rate * dt));
 
@@ -53,8 +57,10 @@ export class PilotRig {
   private readonly elbow = new Vector3();
   private readonly hand = new Vector3();
   private readonly pole = new Vector3();
+  private readonly palm = new Vector3();
+  private readonly thumb = new Vector3();
+  private readonly basis = new Matrix4();
   private readonly direction = new Vector3();
-  private readonly quaternion = new Quaternion();
 
   constructor(readonly root: Group) {
     const find = (name: string): Object3D => {
@@ -122,8 +128,12 @@ export class PilotRig {
         kneePoles: [new Vector3(0.5, 1, 0.15), new Vector3(-0.5, 1, 0.15)],
       };
     }
-    const ankle = (side: number): Vector3 => new Vector3(side * 0.11, BODY.ankleHeight, 0);
-    const toe = (side: number): Vector3 => new Vector3(side * 0.14, BODY.ankleHeight - 0.035, 0.2);
+    // A bota modelada tem sola plana: pé nivelado, tornozelo na altura dela.
+    const modeled = pilotGear() !== null;
+    const height = modeled ? SHOE_ANKLE_HEIGHT : BODY.ankleHeight;
+    const ankle = (side: number): Vector3 => new Vector3(side * 0.11, height, 0);
+    const toe = (side: number): Vector3 =>
+      new Vector3(side * 0.14, modeled ? height : height - 0.035, 0.2);
     return {
       hips: [new Vector3(w, BODY.standingHip, 0), new Vector3(-w, BODY.standingHip, 0)],
       ankles: [ankle(1), ankle(-1)],
@@ -181,11 +191,13 @@ export class PilotRig {
     if (this.pose === 'seated' && this.cockpit) {
       const { steeringCenter, steeringAxis, gripRadius, steeringRatio } = this.cockpit;
       // Mãos às 9 e às 3 horas, girando junto com o aro; o punho fica um pouco antes do aro.
+      // A luva modelada abraça o aro por fora: o punho fica mais atrás e mais aberto.
+      const modeled = pilotGear() !== null;
       out
-        .set(side * gripRadius, 0, 0)
+        .set(side * (gripRadius + (modeled ? GRIP_OUT : 0)), 0, 0)
         .applyAxisAngle(steeringAxis, -this.steer * steeringRatio)
         .add(steeringCenter)
-        .addScaledVector(steeringAxis, -0.075);
+        .addScaledVector(steeringAxis, modeled ? -GRIP_BACK : -0.075);
       return;
     }
     out.copy(this.shoulder);
@@ -215,7 +227,11 @@ export class PilotRig {
       .applyMatrix4(this.upperBody.matrix);
     this.wristTarget(arm.side, this.wrist);
     // Cotovelos para fora e para baixo.
-    this.pole.set(arm.side * 0.8, this.pose === 'celebrate' ? -0.2 : -0.7, -0.35);
+    this.pole.set(
+      arm.side * (this.pose === 'seated' ? 0.5 : 0.8),
+      this.pose === 'celebrate' ? -0.2 : -0.7,
+      -0.35,
+    );
     solveTwoBone(
       this.shoulder,
       this.wrist,
@@ -227,10 +243,23 @@ export class PilotRig {
     );
     this.place(arm.upper, this.shoulder, this.elbow);
     this.place(arm.fore, this.elbow, this.hand);
-    // A mão continua a direção do antebraço.
+    // A mão continua a direção do antebraço (+Y da luva) e a palma (+Z) aponta
+    // para o centro do volante, para baixo (em pé) ou para a frente (comemorando).
+    // O polegar sai para cima no volante e para a frente em pé.
     arm.glove.position.copy(this.hand);
-    arm.glove.quaternion.copy(arm.fore.quaternion);
-    if (arm.side === -1)
-      arm.glove.quaternion.multiply(this.quaternion.setFromAxisAngle(UP, Math.PI));
+    const fingers = this.direction;
+    if (this.pose === 'seated' && this.cockpit) {
+      // No volante o punho dobra: os dedos seguem o eixo da direção, por fora do aro.
+      fingers.multiplyScalar(0.4).add(this.cockpit.steeringAxis).normalize();
+      this.palm.subVectors(this.cockpit.steeringCenter, this.hand);
+    } else if (this.pose === 'celebrate') this.palm.set(0, 0, 1);
+    else this.palm.set(0, -1, 0);
+    this.palm.addScaledVector(fingers, -this.palm.dot(fingers));
+    if (this.palm.lengthSq() < 1e-8) this.palm.set(0, 0, 1);
+    this.palm.normalize();
+    this.thumb.crossVectors(fingers, this.palm);
+    arm.glove.quaternion.setFromRotationMatrix(
+      this.basis.makeBasis(this.thumb, fingers, this.palm),
+    );
   }
 }

@@ -4,6 +4,7 @@ import type { HelmetModel } from '../cosmetics/catalog';
 import { createHelmet } from './helmet/createHelmet';
 import type { ModelProvider } from './ModelProvider';
 import { createPilot } from './pilot/createPilot';
+import { loadPilotGear } from './pilot/gear';
 
 type Factory = (variant?: string) => Group;
 
@@ -24,6 +25,8 @@ export class ProceduralModelProvider implements ModelProvider {
   async load(id: ModelId, variant?: string): Promise<Group> {
     const factory = FACTORIES[id];
     if (!factory) throw new Error(`sem factory procedural para "${id}"`);
+    // Bota e luva modeladas entram na montagem do piloto quando o arquivo existe.
+    if (id === 'pilot') await loadPilotGear();
     return factory(variant);
   }
 

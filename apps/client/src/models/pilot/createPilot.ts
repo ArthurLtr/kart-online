@@ -1,6 +1,9 @@
-import type { BufferGeometry, Color } from 'three';
+import type { BufferGeometry } from 'three';
 import {
   BufferAttribute,
+  Color,
+  DoubleSide,
+  FrontSide,
   Group,
   Matrix4,
   Mesh,
@@ -11,6 +14,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { pilotGear } from './gear';
 import { latheSolid, limbGeometry, segmentMatrix, solveTwoBone } from './geometry';
 
 /** Medidas de um adulto de ~1,76 m, em metros. */
@@ -100,8 +104,66 @@ function torsoGeometry(): BufferGeometry {
   return merge([body, shoulder(1), shoulder(-1)]);
 }
 
-/** Mão enluvada: punho largo e mão fechada. Vai de y = 0 (punho) a BODY.hand. */
-function gloveGeometry(): BufferGeometry {
+const GLOVE_MAIN = new Color(1, 1, 1);
+const GLOVE_TRIM = new Color(0.2, 0.2, 0.22);
+/** Acima do tornozelo a bota passa a seguir a canela; a transição acaba nesta altura. */
+const SHAFT_BLEND = 0.075;
+/** Alargamento do cano para a perna entrar nele. */
+const SHAFT_WIDEN = 1.12;
+
+const smooth = (t: number): number => {
+  const k = Math.min(Math.max(t, 0), 1);
+  return k * k * (3 - 2 * k);
+};
+
+/** Matriz do espaço da bota (Y para cima, Z para o bico) com a origem em `origin`. */
+function shoeFrame(origin: Vector3, up: Vector3, toe: Vector3, upFirst: boolean): Matrix4 {
+  const y = up.clone().normalize();
+  const z = toe.clone().normalize();
+  if (upFirst) z.addScaledVector(y, -z.dot(y)).normalize();
+  else y.addScaledVector(z, -y.dot(z)).normalize();
+  return new Matrix4().makeBasis(new Vector3().crossVectors(y, z), y, z).setPosition(origin);
+}
+
+/**
+ * Dobra a bota rígida no tornozelo: do tornozelo para baixo segue o pé, o cano
+ * segue a canela (e é alargado para envolvê-la), com transição suave entre os dois.
+ */
+function fitShoe(source: BufferGeometry, foot: Matrix4, shin: Matrix4): BufferGeometry {
+  const geometry = source.clone();
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const a = new Vector3();
+  const b = new Vector3();
+  for (let i = 0; i < position.count; i++) {
+    a.fromBufferAttribute(position, i);
+    const weight = smooth(a.y / SHAFT_BLEND);
+    const widen = 1 + (SHAFT_WIDEN - 1) * weight;
+    b.set(a.x * widen, a.y, a.z * widen).applyMatrix4(shin);
+    a.applyMatrix4(foot).lerp(b, weight);
+    position.setXYZ(i, a.x, a.y, a.z);
+    a.fromBufferAttribute(normal, i);
+    b.copy(a).transformDirection(shin);
+    a.transformDirection(foot).lerp(b, weight).normalize();
+    normal.setXYZ(i, a.x, a.y, a.z);
+  }
+  return geometry;
+}
+
+/**
+ * Mão enluvada, de y = 0 (punho) a BODY.hand. Com o modelo de referencias/
+ * carregado usa a luva modelada (o tecido principal recebe a cor do cosmético e
+ * os painéis ficam escuros); sem ele, punho largo e mão fechada. Palma para +Z.
+ * @param side 0 = esquerda, 1 = direita
+ */
+function gloveGeometry(side: 0 | 1): BufferGeometry {
+  const gear = pilotGear();
+  if (gear) {
+    const { main, trim } = gear.gloves[side];
+    return merge([tint(main.clone(), GLOVE_MAIN), tint(trim.clone(), GLOVE_TRIM)]);
+  }
+  // Polegar em -X na mão esquerda e em +X na direita (palma para +Z).
+  const thumbSide = side === 0 ? -1 : 1;
   const cuff = latheSolid(
     [
       [0, -0.055],
@@ -113,7 +175,9 @@ function gloveGeometry(): BufferGeometry {
     14,
   );
   const hand = limbGeometry(BODY.hand - 0.04, 0.043, 0.04, 14);
-  const thumb = limbGeometry(0.045, 0.019, 0.016, 8).rotateZ(-0.9).translate(0.035, 0.03, 0);
+  const thumb = limbGeometry(0.045, 0.019, 0.016, 8)
+    .rotateZ(-0.9 * thumbSide)
+    .translate(0.035 * thumbSide, 0.03, 0);
   return merge([cuff, hand, thumb]);
 }
 
@@ -156,7 +220,9 @@ export function buildLowerBody(
     const thigh = limbGeometry(BODY.thigh, 0.088, 0.066).applyMatrix4(
       segmentMatrix(hip, knee, sideScratch, matrixScratch),
     );
-    const shin = limbGeometry(BODY.shin, 0.064, 0.05).applyMatrix4(
+    const gear = pilotGear();
+    // Com a bota modelada a perna afina para entrar no cano.
+    const shin = limbGeometry(BODY.shin, 0.064, gear ? 0.032 : 0.05).applyMatrix4(
       segmentMatrix(knee, foot, sideScratch, matrixScratch),
     );
     // A textura da perna corre do quadril (v = 0) ao tornozelo (v = 1).
@@ -166,16 +232,27 @@ export function buildLowerBody(
     for (let i = 0; i < shinUv.count; i++) shinUv.setY(i, 0.5 + shinUv.getY(i) * 0.5);
     legParts.push(thigh, shin);
 
-    // Bota: cano acompanhando a canela, pé e sola.
-    const shaftStart = foot.clone().lerp(knee, 0.3);
-    const shaft = limbGeometry(shaftStart.distanceTo(foot), 0.062, 0.058).applyMatrix4(
-      segmentMatrix(shaftStart, foot, sideScratch, matrixScratch),
-    );
     const toeDirection = toe.clone().sub(foot).normalize();
     const footEnd = foot.clone().addScaledVector(toeDirection, BODY.foot);
     // +X local do pé = "para cima" do pé (perpendicular à sola).
     const footUp = new Vector3().subVectors(knee, foot).normalize();
     const footMatrix = segmentMatrix(foot, footEnd, footUp, new Matrix4());
+    if (gear) {
+      // Bota modelada: o pé dela segue o pé e o cano segue a canela.
+      const shoe = gear.shoes[index];
+      const onFoot = shoeFrame(foot, footUp, toeDirection, false);
+      const onShin = shoeFrame(foot, footUp, toeDirection, true);
+      bootParts.push(
+        tint(fitShoe(shoe.upper, onFoot, onShin), bootColor),
+        tint(fitShoe(shoe.sole, onFoot, onShin), soleColor),
+      );
+      continue;
+    }
+    // Bota: cano acompanhando a canela, pé e sola.
+    const shaftStart = foot.clone().lerp(knee, 0.3);
+    const shaft = limbGeometry(shaftStart.distanceTo(foot), 0.062, 0.058).applyMatrix4(
+      segmentMatrix(shaftStart, foot, sideScratch, matrixScratch),
+    );
     const upper = limbGeometry(BODY.foot, 0.052, 0.044).scale(0.85, 1, 1).applyMatrix4(footMatrix);
     const sole = new RoundedBoxGeometry(0.03, BODY.foot + 0.09, 0.1, 3, 0.012)
       .translate(-0.052, BODY.foot / 2, 0)
@@ -203,7 +280,13 @@ export function createPilot(): Group {
   const suitTorso = fabric();
   const suitArm = fabric();
   const suitLeg = fabric();
-  const gloveMaterial = new MeshStandardMaterial({ color: 0x15171b, roughness: 0.7 });
+  const gloveMaterial = new MeshStandardMaterial({
+    color: 0x15171b,
+    roughness: 0.7,
+    vertexColors: pilotGear() !== null,
+    // A luva modelada é tecido de uma face só: desenha os dois lados.
+    side: pilotGear() ? DoubleSide : FrontSide,
+  });
   const bootMaterial = new MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
   suitTorso.name = 'suit_torso';
   suitArm.name = 'suit_arm';
@@ -228,13 +311,15 @@ export function createPilot(): Group {
   boots.name = PILOT_PARTS.boots;
 
   const upperArmGeometry = limbGeometry(BODY.upperArm, 0.062, 0.05);
-  const forearmGeometry = limbGeometry(BODY.forearm, 0.05, 0.04);
+  // Com a luva modelada o punho afina para entrar no cano dela.
+  const forearmGeometry = limbGeometry(BODY.forearm, 0.048, pilotGear() ? 0.019 : 0.04);
   // No antebraço a textura continua de onde o braço parou (v de 0,5 a 1).
   const upperUv = upperArmGeometry.getAttribute('uv');
   for (let i = 0; i < upperUv.count; i++) upperUv.setY(i, upperUv.getY(i) * 0.5);
   const foreUv = forearmGeometry.getAttribute('uv');
   for (let i = 0; i < foreUv.count; i++) foreUv.setY(i, 0.5 + foreUv.getY(i) * 0.5);
-  const glove = gloveGeometry();
+  const gloveLeft = gloveGeometry(0);
+  const gloveRight = gloveGeometry(1);
 
   const limb = (name: string, geometry: BufferGeometry, material: MeshStandardMaterial): Mesh => {
     const mesh = new Mesh(geometry, material);
@@ -249,8 +334,8 @@ export function createPilot(): Group {
     limb(PILOT_PARTS.upperArmRight, upperArmGeometry, suitArm),
     limb(PILOT_PARTS.forearmLeft, forearmGeometry, suitArm),
     limb(PILOT_PARTS.forearmRight, forearmGeometry, suitArm),
-    limb(PILOT_PARTS.gloveLeft, glove, gloveMaterial),
-    limb(PILOT_PARTS.gloveRight, glove, gloveMaterial),
+    limb(PILOT_PARTS.gloveLeft, gloveLeft, gloveMaterial),
+    limb(PILOT_PARTS.gloveRight, gloveRight, gloveMaterial),
   );
   root.traverse((node) => {
     if (node instanceof Mesh) node.receiveShadow = true;

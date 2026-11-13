@@ -1,123 +1,3 @@
-:root {
-  color-scheme: dark;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --painel: rgb(12 14 20 / 72%);
-  --borda: rgb(255 255 255 / 22%);
-  --destaque: #ffd21f;
-}
-
-html,
-body {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-  background: #0b0d12;
-  color: #f2f4f8;
-}
-
-#cena {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-#ui {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  pointer-events: none;
-  font-size: 13px;
-}
-
-.topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-}
-
-.topo h1 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.topo p {
-  margin: 4px 0 0;
-  opacity: 0.85;
-}
-
-#status[data-erro='true'] {
-  color: #ffb4a8;
-  opacity: 1;
-}
-
-.abas {
-  display: flex;
-  gap: 6px;
-  pointer-events: auto;
-}
-
-.abas a,
-.botoes button {
-  font: inherit;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--borda);
-  background: var(--painel);
-  color: inherit;
-  cursor: pointer;
-  text-decoration: none;
-  text-shadow: none;
-  backdrop-filter: blur(6px);
-}
-
-.abas a:hover,
-.botoes button:hover:not(:disabled) {
-  background: rgb(40 46 60 / 85%);
-}
-
-.abas a:focus-visible,
-.botoes button:focus-visible,
-.painel-visao input:focus-visible {
-  outline: 2px solid var(--destaque);
-  outline-offset: 2px;
-}
-
-.abas a[aria-current='page'],
-.botoes button[aria-pressed='true'],
-.botoes button.primario:not(:disabled) {
-  background: var(--destaque);
-  border-color: var(--destaque);
-  color: #14161c;
-}
-
-.botoes button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.botoes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  pointer-events: auto;
-}
-
-#tela-ui p {
-  margin: 8px 0 0;
-  opacity: 0.8;
-  text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-}
-
 /* --- treino e corrida: HUD ----------------------------------------------- */
 #tela-ui[data-tela='treino'],
 #tela-ui[data-tela='conta'],
@@ -150,8 +30,8 @@ body {
   gap: 10px;
   pointer-events: auto;
   background: rgb(12 14 20 / 88%);
-  border: 1px solid var(--borda);
-  border-radius: 14px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
   padding: 16px 18px;
   backdrop-filter: blur(8px);
 }
@@ -179,7 +59,7 @@ body {
 }
 
 .online-painel .erro {
-  color: #ffb4a8;
+  color: var(--perigo);
 }
 
 .online-painel .nota {
@@ -204,14 +84,14 @@ body {
   min-width: 0;
   font: inherit;
   padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  border: 1px solid var(--linha);
   background: rgb(255 255 255 / 8%);
   color: inherit;
 }
 
 .online-painel input:focus-visible {
-  outline: 2px solid var(--destaque);
+  outline: 2px solid var(--acento);
   outline-offset: 1px;
 }
 
@@ -229,7 +109,7 @@ body {
 }
 
 .online-painel tr.voce td {
-  color: var(--destaque);
+  color: var(--acento);
   font-weight: 700;
 }
 
@@ -240,8 +120,8 @@ body {
   width: min(330px, 80%);
   pointer-events: auto;
   background: rgb(0 0 0 / 82%);
-  border: 1px solid var(--borda);
-  border-radius: 10px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
   padding: 10px 12px;
   font-size: 12px;
 }
@@ -279,16 +159,16 @@ body {
 .hud-tempos {
   grid-column: 2;
   text-align: right;
-  background: var(--painel);
-  border: 1px solid var(--borda);
-  border-radius: 10px;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
   padding: 8px 12px;
   line-height: 1.5;
 }
 
 .hud-volta {
   font-weight: 700;
-  color: var(--destaque);
+  color: var(--acento);
 }
 
 .hud-tempo {
@@ -314,9 +194,9 @@ body {
   justify-self: end;
   min-width: 170px;
   text-align: right;
-  background: var(--painel);
-  border: 1px solid var(--borda);
-  border-radius: 10px;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
   padding: 8px 12px;
 }
 
@@ -361,29 +241,8 @@ body {
   opacity: 0.8 !important;
 }
 
-/* --- garagem ------------------------------------------------------------- */
-#tela-ui[data-tela='garagem'] {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(200px, 290px) 1fr minmax(180px, 380px);
-  grid-template-rows: 1fr auto;
-  gap: 12px;
-}
-
-.painel,
-.painel-visao,
-.referencia {
-  pointer-events: auto;
-  background: var(--painel);
-  border: 1px solid var(--borda);
-  border-radius: 12px;
-  padding: 12px;
-  backdrop-filter: blur(8px);
-}
-
+/* --- painéis das telas antigas -------------------------------------------- */
 .painel {
-  grid-row: 1 / 3;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -401,68 +260,6 @@ body {
   margin-bottom: 6px;
   font-weight: 600;
   opacity: 0.9;
-}
-
-.painel .acoes {
-  position: sticky;
-  bottom: -12px;
-  margin: 0 -12px -12px;
-  padding: 10px 12px;
-  background: rgb(12 14 20 / 92%);
-  border-top: 1px solid var(--borda);
-}
-
-.painel-visao {
-  grid-column: 2;
-  grid-row: 2;
-  justify-self: center;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-}
-
-.painel-visao label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.referencia {
-  grid-column: 3;
-  grid-row: 1;
-  align-self: start;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.referencia img {
-  width: 100%;
-  border-radius: 8px;
-  display: block;
-}
-
-@media (max-width: 820px) {
-  #tela-ui[data-tela='garagem'] {
-    grid-template-columns: minmax(150px, 42%) 1fr;
-    grid-template-rows: 1fr auto auto;
-  }
-
-  .painel {
-    grid-row: 1 / 4;
-  }
-
-  .painel-visao {
-    grid-row: 3;
-    justify-self: stretch;
-  }
-
-  .referencia {
-    grid-column: 2;
-    grid-row: 2;
-  }
 }
 
 /* --- conta: entrar, perfil, inventário e ranking --------------------------- */
@@ -509,42 +306,10 @@ body {
   content: ' 🔒';
 }
 
-/* --- Etapa 7: menu, configurações, minimapa e nomes ------------------------ */
-.menu {
-  position: absolute;
-  left: clamp(16px, 7vw, 96px);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(320px, calc(100vw - 32px));
-  pointer-events: auto;
-}
-
-.menu-piloto {
-  margin: 0 0 14px;
-  font-size: 0.95rem;
-  opacity: 0.85;
-}
-
-.menu-botoes {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
-
-.menu-botoes[hidden] {
-  display: none;
-}
-
-.menu-botoes button {
-  padding: 14px 18px;
-  font-size: 1.1rem;
-  text-align: left;
-}
-
 .config {
   pointer-events: auto;
   padding: 16px 18px;
-  border-radius: 14px;
+  border-radius: var(--raio);
   background: rgb(14 16 20 / 82%);
   max-height: calc(100vh - 110px);
   overflow-y: auto;
@@ -597,7 +362,7 @@ body {
   right: 16px;
   width: 168px;
   height: 168px;
-  border-radius: 14px;
+  border-radius: var(--raio);
   background: rgba(10, 12, 16, 0.45);
 }
 
@@ -619,7 +384,7 @@ body {
   left: 0;
   top: 0;
   padding: 1px 7px;
-  border-radius: 8px;
+  border-radius: var(--raio);
   background: rgba(10, 12, 16, 0.6);
   color: #fff;
   font-size: 0.78rem;
@@ -634,11 +399,5 @@ body {
 
 .online-painel .rating {
   font-weight: 600;
-  color: #ffd23c;
-}
-
-/* Correndo, o cabeçalho encolhe para não cobrir a pista. */
-body[data-tela='treino'] .topo h1,
-body[data-tela='corrida'] .topo h1 {
-  font-size: 1rem;
+  color: var(--acento);
 }

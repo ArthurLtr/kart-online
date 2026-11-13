@@ -1,6 +1,7 @@
 import { Color, Group, PerspectiveCamera, PMREMGenerator, Scene } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadLoadout } from '../cosmetics/catalog';
+import { loadPaint } from '../cosmetics/paint';
 import type { Driver } from '../models/driver';
 import { createDriver } from '../models/driver';
 import { disposeTree } from '../render/dispose';
@@ -44,7 +45,7 @@ export function createShowroom(context: AppContext): Showroom {
 
   let disposed = false;
   let driver: Driver | undefined;
-  createDriver(context.models, loadLoadout())
+  createDriver(context.models, loadLoadout(), loadPaint())
     .then((created) => {
       if (disposed) {
         disposeTree(created.kart);
@@ -68,8 +69,8 @@ export function createShowroom(context: AppContext): Showroom {
       driver?.update(delta, 0, Math.sin(time * 0.6) * 0.25);
       // O kart fica à direita da tela, deixando a esquerda livre para os botões.
       const wide = camera.aspect > 1.2;
-      camera.position.set(wide ? -1.5 : 0, 1.55 + Math.sin(time * 0.25) * 0.1, wide ? 6.2 : 8.5);
-      camera.lookAt(wide ? -1.5 : 0, wide ? 0.7 : 1.3, 0);
+      camera.position.set(wide ? -1.25 : 0, 1.55 + Math.sin(time * 0.25) * 0.1, wide ? 5.3 : 8.5);
+      camera.lookAt(wide ? -1.25 : 0, wide ? 0.55 : 1.3, 0);
     },
     dispose() {
       disposed = true;

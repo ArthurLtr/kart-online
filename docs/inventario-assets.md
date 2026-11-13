@@ -99,6 +99,18 @@ A malha única foi separada em 25 ilhas conectadas e reagrupada em 8 partes, sem
 
 Entre-eixos de 1,114 m. São 8 draw calls por kart (72 com 9 karts).
 
+## Bota, luva e árvores
+
+Convertidos por `node tools/assets/convert.mjs gear trees` (Blender + gltf-transform). Origem e licença dos três pacotes ainda não confirmadas.
+
+| Origem em `referencias/`            | Saída                                        | Triângulos               | Como entra no jogo                                                                                                       |
+| ----------------------------------- | -------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `shoes/Jane_shoes.obj` (74 mil tri) | `pilot_gear.glb`: `shoe_upper`, `shoe_sole`  | 3.198 + 500 por pé       | Bota de cano alto presa ao pé do piloto; cabedal e sola recebem as cores do cosmético de botas. Sem textura no pacote.   |
+| `Gloves_Qa/Gloves_Qa.obj` (172 mil) | `pilot_gear.glb`: `glove_main`, `glove_trim` | 2.400 + 1.200 por mão    | Luva no punho do piloto (a outra mão é espelhada); o tecido principal recebe a cor do cosmético, os painéis são escuros. |
+| `arvores/Realistic+Trees+.glb`      | `trees.glb`: `tree_a_*`, `tree_b_*`          | 5.981 e 4.234 por árvore | Vegetação da pista, instanciada (até 180 árvores, 6 draw calls). Texturas reduzidas a 512 px em WebP.                    |
+
+O pacote de árvores traz 6 modelos; só os dois leves entram. Ficaram de fora as duas cerejeiras (3,2 milhões de triângulos cada) e as duas árvores de tronco esculpido (360 e 510 mil), pesadas demais para instanciar no navegador.
+
 ## Ferramentas de conversão
 
 Conversão por Blender em linha de comando (OBJ → GLB, escala, pivô, separação e nomeação das partes), seguida de `gltf-transform` (compressão Meshopt e texturas). Texturas em KTX2 dependem do KTX-Software (`toktx`), que não está instalado; sem ele, as texturas saem em WebP.

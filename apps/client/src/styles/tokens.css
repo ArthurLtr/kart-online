@@ -1,0 +1,69 @@
+/*
+ * Sistema de design do Kart Online. Toda cor, fonte, espaço, raio, sombra e
+ * tempo de animação da interface sai daqui; nenhuma tela define os seus.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Cor */
+  --fundo: #07080a;
+  --superficie: rgb(13 15 19 / 78%);
+  --superficie-solida: #0f1115;
+  --superficie-2: rgb(255 255 255 / 6%);
+  --superficie-3: rgb(255 255 255 / 11%);
+  --linha: rgb(255 255 255 / 13%);
+  --linha-forte: rgb(255 255 255 / 34%);
+  --texto: #f5f4f0;
+  --texto-2: rgb(245 244 240 / 66%);
+  --texto-3: rgb(245 244 240 / 42%);
+  --acento: #dcff2e;
+  --acento-tinta: #0c0e05;
+  --acento-brilho: rgb(220 255 46 / 32%);
+  --perigo: #ff6f5e;
+  --ok: #58e0a0;
+  --frio: #8fd3ff;
+
+  /* Tipografia */
+  --fonte: 'Barlow', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --fonte-titulo: 'Barlow Condensed', 'Arial Narrow', var(--fonte);
+  --fonte-mono: ui-monospace, Consolas, monospace;
+  --t-xs: 0.75rem;
+  --t-s: 0.8125rem;
+  --t-m: 0.9375rem;
+  --t-l: 1.125rem;
+  --t-xl: 1.5rem;
+  --t-2xl: clamp(2rem, 3.4vw, 3rem);
+  --t-3xl: clamp(3.25rem, 8.5vw, 8rem);
+
+  /* Espaço */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 16px;
+  --e5: 24px;
+  --e6: 32px;
+  --e7: 48px;
+  --margem: clamp(16px, 3.4vw, 56px);
+
+  /* Forma */
+  --raio: 3px;
+  --raio-g: 6px;
+  --corte: 12px;
+  --inclinacao: -10deg;
+  --sombra: 0 18px 48px rgb(0 0 0 / 55%);
+  --desfoque: blur(14px) saturate(1.2);
+
+  /* Movimento */
+  --rapido: 110ms;
+  --medio: 260ms;
+  --lento: 520ms;
+  --curva: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --rapido: 0ms;
+    --medio: 0ms;
+    --lento: 0ms;
+  }
+}

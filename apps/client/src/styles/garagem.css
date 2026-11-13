@@ -1,0 +1,539 @@
+/* Garagem: categorias à esquerda, itens ao lado, kart livre à direita. */
+
+#tela-ui[data-tela='garagem'] {
+  display: grid;
+  grid-template-columns: 216px minmax(260px, 330px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--e3);
+}
+
+.gar-categorias {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  pointer-events: auto;
+  animation: entrar-lado var(--lento) var(--curva) backwards;
+}
+
+#tela-ui .gar-grupo {
+  margin: var(--e3) 0 var(--e1) var(--e3);
+  color: var(--texto-3);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+#tela-ui .gar-grupo:first-child {
+  margin-top: 0;
+}
+
+.gar-categoria {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: var(--e2) var(--e3) var(--e2) var(--e4);
+  border: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--texto-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--rapido),
+    color var(--rapido);
+}
+
+.gar-categoria::before {
+  content: '';
+  position: absolute;
+  inset: 6px auto 6px 0;
+  width: 3px;
+  background: var(--acento);
+  transform: scaleY(0);
+  transition: transform var(--medio) var(--curva);
+}
+
+.gar-categoria:hover {
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.gar-categoria[aria-current='true'] {
+  background: var(--superficie);
+  color: var(--texto);
+  backdrop-filter: var(--desfoque);
+}
+
+.gar-categoria[aria-current='true']::before {
+  transform: scaleY(1);
+}
+
+.gar-categoria-nome {
+  font: 600 var(--t-l) / 1.1 var(--fonte-titulo);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gar-categoria-valor {
+  overflow: hidden;
+  color: var(--texto-3);
+  font-size: var(--t-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gar-categoria[data-alterado='true'] .gar-categoria-valor {
+  color: var(--acento);
+}
+
+.gar-itens {
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  min-height: 0;
+  padding: var(--e5) var(--e4) var(--e4);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+  backdrop-filter: var(--desfoque);
+  box-shadow: var(--sombra);
+  pointer-events: auto;
+}
+
+.gar-itens-topo {
+  display: grid;
+  gap: var(--e2);
+}
+
+.gar-titulo {
+  margin: 0;
+  font: italic 700 var(--t-2xl) / 0.95 var(--fonte-titulo);
+  letter-spacing: 0.01em;
+}
+
+#tela-ui .gar-itens-topo .nota {
+  margin: 0;
+}
+
+.gar-grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: var(--e2);
+  min-height: 0;
+  margin: 0 calc(var(--e2) * -1);
+  padding: var(--e1) var(--e2);
+  overflow-y: auto;
+}
+
+.gar-item {
+  position: relative;
+  display: grid;
+  gap: var(--e2);
+  padding: var(--e2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--rapido),
+    background var(--rapido),
+    transform var(--rapido);
+  animation: entrar var(--medio) var(--curva) backwards;
+  animation-delay: calc(var(--ordem) * 35ms);
+}
+
+.gar-item:hover {
+  border-color: var(--linha-forte);
+  background: var(--superficie-3);
+}
+
+.gar-item:active {
+  transform: scale(0.97);
+}
+
+.gar-item[aria-pressed='true'] {
+  border-color: var(--acento);
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+
+.gar-amostra {
+  height: 58px;
+  border-radius: 2px;
+  background: var(--superficie-3);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 10%);
+}
+
+/* Item sem cor própria (sem trilha, modelo de capacete): hachura neutra. */
+.gar-amostra[data-vazio='true'] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--superficie-2) 0 8px,
+    var(--superficie-3) 8px 16px
+  );
+}
+
+.gar-item-nome {
+  font-weight: 600;
+  font-size: var(--t-s);
+  line-height: 1.25;
+}
+
+.gar-item-estado {
+  min-height: 1em;
+  color: var(--acento);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gar-item[data-bloqueado='true'] .gar-amostra {
+  opacity: 0.45;
+}
+
+.gar-item[data-bloqueado='true'] .gar-item-estado {
+  color: var(--texto-3);
+}
+
+.gar-item[data-bloqueado='true'] .gar-item-estado::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 1px;
+  background: currentcolor;
+  box-shadow:
+    0 -5px 0 -2px var(--superficie-solida),
+    0 -5px 0 0 currentcolor;
+}
+
+#tela-ui .gar-aviso {
+  margin: auto 0 0;
+  color: var(--perigo);
+}
+
+.gar-aviso:empty {
+  display: none;
+}
+
+.gar-barra {
+  grid-column: 3;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e3);
+}
+
+.gar-acoes {
+  align-items: center;
+  margin-left: auto;
+}
+
+.gar-acoes button {
+  padding: var(--e3) var(--e5);
+  font-size: var(--t-l);
+}
+
+.gar-pendente {
+  color: var(--acento);
+  font-size: var(--t-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gar-referencia {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  width: min(300px, 100%);
+  margin: 0;
+  pointer-events: auto;
+}
+
+.gar-referencia[hidden] {
+  display: none;
+}
+
+.gar-referencia img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  cursor: pointer;
+}
+
+@media (max-width: 980px) {
+  #tela-ui[data-tela='garagem'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 34vh);
+  }
+
+  .gar-categorias {
+    grid-row: 1;
+    flex-direction: row;
+    overflow: auto hidden;
+  }
+
+  .gar-grupo,
+  .gar-categoria-valor {
+    display: none;
+  }
+
+  .gar-categoria {
+    flex: none;
+  }
+
+  .gar-barra {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .gar-itens {
+    grid-row: 4;
+    padding: var(--e3);
+  }
+
+  .gar-itens-topo .sobretitulo,
+  .gar-itens-topo .nota {
+    display: none;
+  }
+
+  .gar-titulo {
+    font-size: var(--t-xl);
+  }
+
+  .gar-grade {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .gar-amostra {
+    height: 34px;
+  }
+
+  .gar-referencia {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+/* --- editor de pintura ------------------------------------------------------ */
+.gar-grade[hidden],
+.pin[hidden] {
+  display: none;
+}
+
+.pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  min-height: 0;
+  margin: 0 calc(var(--e2) * -1);
+  padding: var(--e1) var(--e2);
+  overflow-y: auto;
+}
+
+.pin-secao {
+  display: grid;
+  gap: var(--e2);
+}
+
+.pin-rotulo {
+  margin: 0;
+  color: var(--texto-3);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.2em;
+}
+
+#tela-ui .pin-estado {
+  margin: 0;
+}
+
+.pin-prontas {
+  display: flex;
+  gap: var(--e2);
+}
+
+.pin-pronta {
+  position: relative;
+  flex: 1;
+  height: 30px;
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: transform var(--rapido);
+}
+
+.pin-pronta:hover {
+  transform: translateY(-2px);
+}
+
+.pin-pronta[aria-pressed='true'] {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.pin-pronta[data-bloqueado='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, rgb(0 0 0 / 55%) 0 5px, transparent 5px 10px);
+}
+
+.pin-zonas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--e1);
+}
+
+.pin-zona {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font: 600 var(--t-m) / 1.2 var(--fonte-titulo);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color var(--rapido),
+    background var(--rapido);
+}
+
+.pin-zona:first-child {
+  grid-column: 1 / 3;
+}
+
+.pin-zona:hover {
+  background: var(--superficie-3);
+}
+
+.pin-zona[aria-pressed='true'] {
+  border-color: var(--acento);
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+
+.pin-zona-cor {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--linha-forte);
+}
+
+.pin-alvo button {
+  flex: 1;
+}
+
+.pin .botoes button {
+  padding: 6px var(--e3);
+  font-size: var(--t-s);
+}
+
+.pin-tamanho {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  color: var(--texto-2);
+  font-size: var(--t-s);
+}
+
+.pin-tamanho input {
+  flex: 1;
+}
+
+/* --- rodas e adesivos --------------------------------------------------------- */
+.pin-limpar {
+  margin-top: var(--e2);
+}
+
+.pin-numero {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  font-size: var(--t-sm);
+  color: var(--texto-2);
+}
+
+.pin-numero input {
+  width: 5.5ch;
+  font-family: var(--fonte-titulo);
+  font-style: italic;
+  font-weight: 700;
+  font-size: var(--t-xl);
+  text-align: center;
+}
+
+.pin-camadas {
+  display: grid;
+  gap: var(--e1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pin-camadas:empty {
+  display: none;
+}
+
+.pin-camada {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--e1);
+}
+
+.pin-camada-nome,
+.pin-camada-acao {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  min-height: 2.25rem;
+  padding: 0 var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+.pin-camada-acao {
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0;
+  color: var(--texto-2);
+}
+
+.pin-camada-nome:hover,
+.pin-camada-acao:hover:not(:disabled) {
+  border-color: var(--linha-forte);
+}
+
+.pin-camada-nome[aria-pressed='true'] {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+
+.pin-camada-acao:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pin > .gar-grade {
+  flex: none;
+  overflow: visible;
+  padding: 0;
+}

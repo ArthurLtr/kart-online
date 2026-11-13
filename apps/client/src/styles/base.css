@@ -1,0 +1,720 @@
+/* Base, casca de navegação e componentes reutilizáveis. Só usa tokens. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#cena {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--e3);
+  padding: var(--e4) var(--margem);
+  pointer-events: none;
+  font-size: var(--t-s);
+}
+
+/* Véu sobre a cena: escurece as bordas para o texto ler bem sem cobrir o kart. */
+#ui::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      180deg,
+      rgb(7 8 10 / 82%) 0,
+      transparent 22%,
+      transparent 62%,
+      rgb(7 8 10 / 90%)
+    ),
+    linear-gradient(90deg, rgb(7 8 10 / 78%) 0, transparent 52%);
+}
+
+body:is([data-tela='treino'], [data-tela='corrida'], [data-tela='pista']) #ui::before {
+  display: none;
+}
+
+::selection {
+  background: var(--acento);
+  color: var(--acento-tinta);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--linha-forte) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 3px;
+}
+
+@keyframes entrar {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+
+@keyframes entrar-lado {
+  from {
+    opacity: 0;
+    translate: -22px 0;
+  }
+}
+
+/* --- casca: topo ----------------------------------------------------------- */
+.topo {
+  display: flex;
+  align-items: center;
+  gap: var(--e5);
+  min-height: 44px;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  margin: 0;
+  font: italic 700 var(--t-xl) / 1 var(--fonte-titulo);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.marca::before {
+  content: '';
+  width: 10px;
+  height: 26px;
+  background: var(--acento);
+  transform: skewX(var(--inclinacao));
+  box-shadow: 0 0 18px var(--acento-brilho);
+}
+
+.marca b {
+  font-weight: 700;
+  color: var(--acento);
+}
+
+.abas {
+  display: flex;
+  gap: var(--e1);
+  margin-right: auto;
+  pointer-events: auto;
+  overflow-x: auto;
+}
+
+.abas a {
+  position: relative;
+  padding: var(--e3) var(--e4);
+  color: var(--texto-2);
+  font: 600 var(--t-l) / 1 var(--fonte-titulo);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--rapido);
+}
+
+.abas a::after {
+  content: '';
+  position: absolute;
+  left: var(--e4);
+  right: var(--e4);
+  bottom: 2px;
+  height: 2px;
+  background: var(--acento);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--medio) var(--curva);
+}
+
+.abas a:hover,
+.abas a[aria-current='page'] {
+  color: var(--texto);
+}
+
+.abas a[aria-current='page']::after {
+  transform: scaleX(1);
+}
+
+.piloto {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  padding: var(--e1) var(--e3) var(--e1) var(--e1);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+  backdrop-filter: var(--desfoque);
+  color: inherit;
+  text-decoration: none;
+  pointer-events: auto;
+  transition: border-color var(--rapido);
+}
+
+.piloto:hover {
+  border-color: var(--linha-forte);
+}
+
+.piloto-sigla {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--raio);
+  background: var(--acento);
+  color: var(--acento-tinta);
+  font: italic 700 var(--t-l) / 1 var(--fonte-titulo);
+}
+
+.piloto-texto {
+  display: grid;
+  line-height: 1.25;
+}
+
+.piloto-nome {
+  font-weight: 600;
+  font-size: var(--t-m);
+}
+
+.piloto-nivel {
+  color: var(--texto-2);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* --- casca: rodapé --------------------------------------------------------- */
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e4);
+  min-height: 28px;
+  color: var(--texto-2);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+}
+
+#status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+  text-transform: uppercase;
+}
+
+#status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+#status[data-erro='true'] {
+  color: var(--perigo);
+  text-transform: none;
+}
+
+#status[data-erro='true']::before {
+  background: var(--perigo);
+}
+
+.dicas {
+  display: flex;
+  gap: var(--e4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.dicas li {
+  display: flex;
+  align-items: center;
+  gap: var(--e2);
+}
+
+kbd {
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--linha-forte);
+  border-bottom-width: 2px;
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font: 600 var(--t-xs) / 1.3 var(--fonte);
+  text-align: center;
+}
+
+/* Correndo, a casca some: sobra só o status, pequeno. */
+body:is([data-tela='treino'], [data-tela='corrida'], [data-tela='pista'])
+  :is(.marca, .abas, .piloto, .dicas) {
+  display: none;
+}
+
+body:is([data-tela='treino'], [data-tela='corrida'], [data-tela='pista']) .topo {
+  min-height: 0;
+}
+
+#tela-ui {
+  min-height: 0;
+  position: relative;
+}
+
+#tela-ui > * {
+  animation: entrar var(--medio) var(--curva) backwards;
+}
+
+/* --- componentes ----------------------------------------------------------- */
+.sobretitulo {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  color: var(--acento);
+  font: 600 var(--t-m) / 1 var(--fonte-titulo);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.sobretitulo::before {
+  content: '';
+  width: 28px;
+  height: 2px;
+  background: currentcolor;
+}
+
+.titulo-xl {
+  margin: 0;
+  font: italic 700 var(--t-3xl) / 0.86 var(--fonte-titulo);
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+h2,
+h3 {
+  font-family: var(--fonte-titulo);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 3px var(--e2);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  color: var(--texto-2);
+  font: 600 var(--t-xs) / 1.2 var(--fonte);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Botão: `.btn` nas telas novas; `.botoes button` cobre as telas ainda não refeitas. */
+.btn,
+.botoes button {
+  position: relative;
+  padding: var(--e2) var(--e4);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: var(--texto);
+  font: 600 var(--t-m) / 1.2 var(--fonte-titulo);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background var(--rapido),
+    border-color var(--rapido),
+    color var(--rapido),
+    transform var(--rapido);
+}
+
+.btn:hover:not(:disabled),
+.botoes button:hover:not(:disabled) {
+  background: var(--superficie-3);
+  border-color: var(--linha-forte);
+}
+
+.btn:active:not(:disabled),
+.botoes button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled,
+.botoes button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-primario,
+.botoes button.primario:not(:disabled),
+.botoes button[aria-pressed='true'] {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--acento-tinta);
+}
+
+.btn-primario:hover:not(:disabled),
+.botoes button.primario:hover:not(:disabled),
+.botoes button[aria-pressed='true']:hover {
+  background: var(--texto);
+  border-color: var(--texto);
+}
+
+/* Botão grande de ação: canto cortado e seta. */
+.btn-g {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e5);
+  padding: var(--e4) var(--e5) var(--e4) var(--e6);
+  border: 0;
+  font-size: var(--t-xl);
+  font-style: italic;
+  clip-path: polygon(var(--corte) 0, 100% 0, calc(100% - var(--corte)) 100%, 0 100%);
+}
+
+.btn-g::after {
+  content: '';
+  width: 22px;
+  height: 12px;
+  background: currentcolor;
+  clip-path: polygon(0 40%, 62% 40%, 62% 0, 100% 50%, 62% 100%, 62% 60%, 0 60%);
+  transition: transform var(--medio) var(--curva);
+}
+
+.btn-g:hover::after,
+.btn-g:focus-visible::after {
+  transform: translateX(6px);
+}
+
+.botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  pointer-events: auto;
+}
+
+.painel,
+.painel-visao,
+.referencia,
+.cartao {
+  pointer-events: auto;
+  background: var(--superficie);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  padding: var(--e4);
+  backdrop-filter: var(--desfoque);
+  box-shadow: var(--sombra);
+}
+
+input:not([type='checkbox'], [type='range'], [type='color']),
+select {
+  font: inherit;
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie-2);
+  color: inherit;
+}
+
+input[type='range'],
+input[type='checkbox'] {
+  accent-color: var(--acento);
+}
+
+.nota {
+  color: var(--texto-2);
+  font-size: var(--t-s);
+}
+
+.erro {
+  color: var(--perigo);
+}
+
+#tela-ui p {
+  margin: var(--e2) 0 0;
+}
+
+/* --- menu principal -------------------------------------------------------- */
+.inicio {
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--e5);
+}
+
+.inicio-heroi {
+  align-self: center;
+  display: grid;
+  justify-items: start;
+  gap: var(--e4);
+  max-width: min(620px, 100%);
+  animation: entrar-lado var(--lento) var(--curva) backwards;
+}
+
+.inicio-heroi .titulo-xl {
+  text-shadow: 0 6px 40px rgb(0 0 0 / 60%);
+}
+
+#tela-ui .inicio-desc {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--texto-2);
+  font-size: var(--t-l);
+  line-height: 1.45;
+}
+
+.inicio-fatos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inicio-heroi .btn-g {
+  margin-top: var(--e3);
+}
+
+.inicio-modos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--e3);
+}
+
+.modo {
+  position: relative;
+  display: grid;
+  gap: var(--e1);
+  padding: var(--e4) var(--e4) var(--e4) var(--e5);
+  border: 1px solid var(--linha);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+  backdrop-filter: var(--desfoque);
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  overflow: hidden;
+  transition:
+    transform var(--medio) var(--curva),
+    border-color var(--rapido),
+    background var(--rapido);
+  animation: entrar var(--lento) var(--curva) backwards;
+  animation-delay: calc(var(--ordem) * 60ms + 120ms);
+}
+
+.modo::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--acento);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform var(--medio) var(--curva);
+}
+
+.modo[aria-current='true'] {
+  transform: translateY(-6px);
+  border-color: var(--linha-forte);
+  background: rgb(26 29 35 / 88%);
+}
+
+.modo[aria-current='true']::before {
+  transform: scaleY(1);
+}
+
+.modo-numero {
+  color: var(--texto-3);
+  font: italic 700 var(--t-m) / 1 var(--fonte-titulo);
+  letter-spacing: 0.12em;
+}
+
+.modo[aria-current='true'] .modo-numero {
+  color: var(--acento);
+}
+
+.modo-nome {
+  font: italic 700 var(--t-xl) / 1.05 var(--fonte-titulo);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.modo-resumo {
+  color: var(--texto-2);
+  font-size: var(--t-s);
+}
+
+@media (max-width: 900px) {
+  .piloto-texto,
+  .dicas {
+    display: none;
+  }
+
+  .topo {
+    gap: var(--e3);
+  }
+
+  .marca span {
+    display: none;
+  }
+
+  .inicio-modos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modo[aria-current='true'] {
+    transform: none;
+  }
+}
+
+@media (max-height: 620px) {
+  .modo-resumo,
+  .inicio-fatos {
+    display: none;
+  }
+}
+
+/* --- seletor de cor --------------------------------------------------------- */
+.cor {
+  display: grid;
+  gap: var(--e2);
+}
+
+.cor-campo {
+  position: relative;
+  height: 132px;
+  border-radius: var(--raio);
+  background:
+    linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--matiz, #f00));
+  box-shadow: inset 0 0 0 1px var(--linha);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cor-ponto {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 60%),
+    0 2px 6px rgb(0 0 0 / 50%);
+  pointer-events: none;
+}
+
+.cor-matiz {
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  border-radius: var(--raio);
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  appearance: none;
+  cursor: pointer;
+}
+
+.cor-matiz::-webkit-slider-thumb {
+  width: 10px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 60%);
+  appearance: none;
+}
+
+.cor-matiz::-moz-range-thumb {
+  width: 8px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.cor-linha {
+  display: flex;
+  gap: var(--e2);
+}
+
+.cor-amostra {
+  width: 38px;
+  border-radius: var(--raio);
+  box-shadow: inset 0 0 0 1px var(--linha-forte);
+}
+
+.cor-linha .cor-hex {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--fonte-mono);
+  letter-spacing: 0.08em;
+}
+
+.cor-hex[data-invalido='true'] {
+  border-color: var(--perigo);
+}
+
+#tela-ui .cor-rotulo {
+  margin: var(--e1) 0 0;
+  color: var(--texto-3);
+  font-size: var(--t-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cor-paleta {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--e1);
+}
+
+.cor-paleta[hidden],
+.cor-rotulo[hidden] {
+  display: none;
+}
+
+.cor-opcao {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+  cursor: pointer;
+  transition: transform var(--rapido);
+}
+
+.cor-opcao:hover {
+  transform: scale(1.15);
+}

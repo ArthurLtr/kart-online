@@ -1,6 +1,8 @@
 // Converte os modelos de referencias/ em GLBs otimizados para o cliente.
 // Uso: pnpm assets   (requer Blender; defina BLENDER=<caminho> se não for achado)
 //
+// Uso parcial: node tools/assets/convert.mjs gear trees
+//
 // Etapas: Blender separa/nomeia/escala o kart -> gltf-transform liga as texturas
 // PBR (cor, normal, ORM), comprime a geometria com Meshopt e as texturas em WebP.
 import { spawnSync } from 'node:child_process';
@@ -134,4 +136,101 @@ async function convertKart() {
   }
 }
 
-await convertKart();
+/** Roda um script do Blender e devolve o relatório JSON que ele grava. */
+function runBlender(script, args, reportFile) {
+  mkdirSync(tmp, { recursive: true });
+  mkdirSync(outDir, { recursive: true });
+  const run = spawnSync(findBlender(), ['-b', '--python', join(here, script), '--', ...args], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (run.error || !run.stdout.includes('CONVERT_OK')) {
+    console.error(run.stdout?.split('\n').slice(-15).join('\n'));
+    throw new Error(`Blender falhou em ${script} (${run.error?.message ?? 'veja o log acima'})`);
+  }
+  return JSON.parse(readFileSync(reportFile, 'utf8'));
+}
+
+async function gltfIo() {
+  await MeshoptEncoder.ready;
+  return new NodeIO()
+    .registerExtensions(ALL_EXTENSIONS)
+    .registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+}
+
+// Medidas do piloto procedural (BODY em apps/client/src/models/pilot/createPilot.ts).
+const GEAR = {
+  shoeLength: 0.28,
+  heelBack: 0.055,
+  ankleHeight: 0.07,
+  gloveLength: 0.155,
+  cuff: 0.06,
+};
+
+/** Bota e luva do piloto: só geometria (as cores vêm dos cosméticos). */
+async function convertGear() {
+  const rawGlb = join(tmp, 'gear_raw.glb');
+  const reportFile = join(tmp, 'gear_report.json');
+  const report = runBlender(
+    'convert_gear.py',
+    [
+      join(refs, 'shoes/Jane_shoes.obj'),
+      join(refs, 'Gloves_Qa/Gloves_Qa/Gloves_Qa.obj'),
+      rawGlb,
+      reportFile,
+      ...[GEAR.shoeLength, GEAR.heelBack, GEAR.ankleHeight, GEAR.gloveLength, GEAR.cuff].map(
+        String,
+      ),
+    ],
+    reportFile,
+  );
+  const io = await gltfIo();
+  const document = await io.read(rawGlb);
+  await document.transform(dedup(), prune(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  const outFile = join(outDir, 'pilot_gear.glb');
+  await io.write(outFile, document);
+  console.log(`pilot_gear.glb  ${(statSync(outFile).size / 1024).toFixed(0)} KB`);
+  console.log(
+    `  bota: ${report.shoe.upper} + ${report.shoe.sole} tri · luva: ${report.glove.main} + ${report.glove.trim} tri`,
+  );
+}
+
+/** Árvores da pista: as duas leves do pacote, com texturas reduzidas. */
+async function convertTrees() {
+  const rawGlb = join(tmp, 'trees_raw.glb');
+  const reportFile = join(tmp, 'trees_report.json');
+  const report = runBlender(
+    'convert_trees.py',
+    [join(refs, 'arvores/Realistic+Trees+.glb'), rawGlb, reportFile],
+    reportFile,
+  );
+  const io = await gltfIo();
+  const document = await io.read(rawGlb);
+  for (const material of document.getRoot().listMaterials()) {
+    // Folhas e galhos são cartões recortados pelo alfa da textura.
+    if (/^(Leaf|Branch)/.test(material.getName())) {
+      material.setAlphaMode('MASK').setAlphaCutoff(0.45).setDoubleSided(true);
+    } else {
+      material.setAlphaMode('OPAQUE');
+    }
+  }
+  await document.transform(
+    dedup(),
+    prune(),
+    textureCompress({ encoder: sharp, targetFormat: 'webp', quality: 85, resize: [512, 512] }),
+    meshopt({ encoder: MeshoptEncoder, level: 'medium' }),
+  );
+  const outFile = join(outDir, 'trees.glb');
+  await io.write(outFile, document);
+  console.log(`trees.glb  ${(statSync(outFile).size / 1024).toFixed(0)} KB`);
+  for (const [name, tree] of Object.entries(report)) {
+    console.log(`  - ${name}: ${tree.bark} + ${tree.leaves} tri, ${tree.height} m`);
+  }
+}
+
+// Sem argumentos converte tudo; "node convert.mjs gear trees" converte só o que for pedido.
+const STEPS = { kart: convertKart, gear: convertGear, trees: convertTrees };
+const wanted = process.argv.slice(2);
+for (const [name, step] of Object.entries(STEPS)) {
+  if (wanted.length === 0 || wanted.includes(name)) await step();
+}

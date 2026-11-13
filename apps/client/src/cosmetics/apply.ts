@@ -7,6 +7,8 @@ import type { PilotRig } from '../models/pilot/PilotRig';
 import { suitTextures } from '../models/pilot/suitTextures';
 import type { Loadout } from './catalog';
 import { findDesign } from './catalog';
+import { paintKart } from './kartPaint';
+import type { KartPaint } from './paint';
 
 const KART_PART_NAMES = new Set<string>(Object.values(KART_PARTS));
 const liveryCache = new Map<string, Texture>();
@@ -50,7 +52,12 @@ function recolorLivery(original: Texture, hex: string): Texture {
   return texture;
 }
 
-function applyLivery(kart: Group, color: string | null): void {
+function applyLivery(
+  kart: Group,
+  color: string | null,
+  custom: KartPaint | null,
+  rimColor: string | null,
+): void {
   // Os karts clonados dividem um material; cada kart ganha o seu na primeira troca.
   let paint = kart.userData.paintMaterial as MeshStandardMaterial | undefined;
   let original = kart.userData.originalLivery as Texture | undefined;
@@ -68,6 +75,8 @@ function applyLivery(kart: Group, color: string | null): void {
   }
   if (!paint || !original) return;
   paint.map = color ? recolorLivery(original, color) : original;
+  // A pintura livre, quando existe, vale no lugar da pintura pronta do catálogo.
+  paintKart(kart, paint, original, custom, rimColor);
   paint.needsUpdate = true;
 }
 
@@ -80,7 +89,8 @@ const WHEEL_PARTS = new Set<string>([
 
 /**
  * Aros: as quatro rodas ganham um material próprio, tingido. O pneu é preto na
- * textura e continua preto; só o aro (claro) pega a cor.
+ * textura e continua preto; só o aro (claro) pega a cor. Com pintura livre a
+ * cor do aro já vem pintada na textura, então o material não tinge nada.
  */
 function applyRims(kart: Group, color: string | null): void {
   const paint = kart.userData.paintMaterial as MeshStandardMaterial | undefined;
@@ -96,6 +106,9 @@ function applyRims(kart: Group, color: string | null): void {
     });
   }
   wheels.map = paint.map;
+  wheels.roughnessMap = paint.roughnessMap;
+  wheels.metalnessMap = paint.metalnessMap;
+  wheels.aoMap = paint.aoMap;
   wheels.color.set(color ?? '#ffffff');
   wheels.needsUpdate = true;
 }
@@ -116,11 +129,17 @@ export interface Dressable {
  * Aplica um loadout aos modelos. Mexe só em materiais e texturas; forma,
  * tamanho e colisão ficam intactos (cosmético nunca altera a física).
  * O modelo do capacete é uma troca de malha e fica por conta de quem carrega.
+ * @param paint pintura livre do kart (`null` = pintura pronta do loadout)
  */
-export function applyLoadout(target: Dressable, loadout: Loadout): void {
+export function applyLoadout(
+  target: Dressable,
+  loadout: Loadout,
+  paint: KartPaint | null = null,
+): void {
   if (target.kart) {
-    applyLivery(target.kart, findDesign('livery', loadout.livery).color);
-    applyRims(target.kart, findDesign('rim', loadout.rim).color);
+    const rim = findDesign('rim', loadout.rim).color;
+    applyLivery(target.kart, findDesign('livery', loadout.livery).color, paint, rim);
+    applyRims(target.kart, paint ? null : rim);
   }
 
   if (target.pilot) {

@@ -8,6 +8,7 @@ import {
   Group,
   IcosahedronGeometry,
   InstancedMesh,
+  Matrix4,
   LatheGeometry,
   Mesh,
   MeshPhysicalMaterial,
@@ -25,6 +26,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Track } from '@kart/shared';
 import { barrierOffset, frameAt, pointAt, projectToTrack } from '@kart/shared';
 import { SHORE_Z } from './surface';
+import { loadGlb } from '../models/glb';
 import { createRandom, crowdTexture, signTexture } from './textures';
 
 function merged(geometries: BufferGeometry[]): BufferGeometry {
@@ -243,29 +245,58 @@ function pitBuildings(): Group {
   return group;
 }
 
-/** Árvores de copa arredondada espalhadas fora da pista (tronco e copa instanciados). */
-function trees(track: Track, density: number): Group {
-  const group = new Group();
-  group.name = 'trees';
-  const random = createRandom(101);
-  const spots: { x: number; z: number; scale: number }[] = [];
-  const blocked = (x: number, z: number): boolean => {
-    if (z < SHORE_Z + 6) return true; // areia e mar
-    const nearStand =
-      x > STAND.x0 - 12 && x < STAND.x0 + STAND.length + 12 && z < STAND.front + 4 && z > -45;
-    const nearPits =
-      x > TOWER.x - 14 && x < PITS.x + PITS.length / 2 + 8 && z > PITS.z - 12 && z < PITS.z + 14;
-    if (nearStand || nearPits) return true;
-    const projection = projectToTrack(track, x, z);
-    const side = projection.d >= 0 ? 1 : -1;
-    return Math.abs(projection.d) < barrierOffset(track, projection.s, side) + 5;
-  };
-  for (let attempt = 0; attempt < 4000 && spots.length < Math.round(280 * density); attempt++) {
-    const x = -330 + random() * 680;
-    const z = SHORE_Z + random() * 330;
-    if (!blocked(x, z)) spots.push({ x, z, scale: 0.75 + random() * 0.7 });
-  }
+interface TreeSpot {
+  x: number;
+  z: number;
+  scale: number;
+}
 
+const TREES_URL = '/assets/models/trees.glb';
+const TREE_MODELS = ['tree_a', 'tree_b'] as const;
+
+/** Árvores modeladas: cada espécie vira um InstancedMesh por material (tronco, folhas, galhos). */
+function modelTrees(group: Group, source: Object3D, spots: readonly TreeSpot[]): void {
+  const random = createRandom(202);
+  source.updateMatrixWorld(true);
+  const bySpecies = TREE_MODELS.map(() => [] as Matrix4[]);
+  const dummy = new Object3D();
+  for (const spot of spots) {
+    dummy.position.set(spot.x, 0, spot.z);
+    dummy.rotation.set(0, random() * Math.PI * 2, 0);
+    dummy.scale.setScalar(spot.scale * 1.15);
+    dummy.updateMatrix();
+    bySpecies[random() < 0.55 ? 0 : 1]!.push(dummy.matrix.clone());
+  }
+  const matrix = new Matrix4();
+  const color = new Color();
+  TREE_MODELS.forEach((name, species) => {
+    const placements = bySpecies[species]!;
+    for (const part of ['bark', 'leaves']) {
+      source.getObjectByName(`${name}_${part}`)?.traverse((node) => {
+        if (!(node instanceof Mesh)) return;
+        const material = node.material as MeshStandardMaterial;
+        const instances = new InstancedMesh(
+          node.geometry as BufferGeometry,
+          material,
+          placements.length,
+        );
+        placements.forEach((placement, i) => {
+          // O GLB guarda a geometria quantizada, com a escala no nó.
+          instances.setMatrixAt(i, matrix.multiplyMatrices(placement, node.matrixWorld));
+          if (part === 'leaves')
+            instances.setColorAt(i, color.setHSL(0.27, 0, 0.72 + random() * 0.28));
+        });
+        instances.castShadow = true;
+        instances.receiveShadow = part === 'bark';
+        group.add(instances);
+      });
+    }
+  });
+}
+
+/** Árvores procedurais de copa arredondada (tronco e copa instanciados). */
+function proceduralTrees(group: Group, spots: readonly TreeSpot[]): void {
+  const random = createRandom(202);
   const trunks = new InstancedMesh(
     new LatheGeometry(
       [
@@ -303,6 +334,37 @@ function trees(track: Track, density: number): Group {
   trunks.castShadow = crowns.castShadow = true;
   crowns.receiveShadow = true;
   group.add(trunks, crowns);
+}
+
+/**
+ * Árvores espalhadas fora da pista, instanciadas. Usa os modelos convertidos de
+ * referencias/arvores; se o arquivo não existir, caem as árvores procedurais.
+ */
+function trees(track: Track, density: number): Group {
+  const group = new Group();
+  group.name = 'trees';
+  const random = createRandom(101);
+  const spots: TreeSpot[] = [];
+  const blocked = (x: number, z: number): boolean => {
+    if (z < SHORE_Z + 6) return true; // areia e mar
+    const nearStand =
+      x > STAND.x0 - 12 && x < STAND.x0 + STAND.length + 12 && z < STAND.front + 4 && z > -45;
+    const nearPits =
+      x > TOWER.x - 14 && x < PITS.x + PITS.length / 2 + 8 && z > PITS.z - 12 && z < PITS.z + 14;
+    if (nearStand || nearPits) return true;
+    const projection = projectToTrack(track, x, z);
+    const side = projection.d >= 0 ? 1 : -1;
+    return Math.abs(projection.d) < barrierOffset(track, projection.s, side) + 5;
+  };
+  for (let attempt = 0; attempt < 4000 && spots.length < Math.round(180 * density); attempt++) {
+    const x = -330 + random() * 680;
+    const z = SHORE_Z + random() * 330;
+    if (!blocked(x, z)) spots.push({ x, z, scale: 0.75 + random() * 0.7 });
+  }
+
+  loadGlb(TREES_URL)
+    .then(({ scene }) => modelTrees(group, scene, spots))
+    .catch(() => proceduralTrees(group, spots));
   return group;
 }
 
