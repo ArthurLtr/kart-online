@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Convidado (só apelido) ou conta com e-mail.
+model User {
+  id           String    @id @default(cuid())
+  email        String?   @unique
+  passwordHash String?
+  isGuest      Boolean   @default(true)
+  /// Obrigatória em conta com e-mail; usada nas regras de idade.
+  birthDate    DateTime? @db.Date
+  createdAt    DateTime  @default(now())
+
+  profile   Profile?
+  ratings   Rating[]
+  results   MatchResult[]
+  inventory Inventory[]
+  loadout   EquippedLoadout?
+}
+
+model Profile {
+  userId   String @id
+  nickname String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Season {
+  id       String   @id @default(cuid())
+  name     String
+  startsAt DateTime
+  endsAt   DateTime
+
+  ratings Rating[]
+  matches Match[]
+
+  @@index([endsAt])
+}
+
+/// Rating OpenSkill de um jogador numa temporada.
+model Rating {
+  userId   String
+  seasonId String
+  mu       Float
+  sigma    Float
+  matches  Int    @default(0)
+  /// Pontos exibidos (derivados de mu e sigma), guardados para ordenar o ranking.
+  points   Int    @default(0)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@id([userId, seasonId])
+  @@index([seasonId, points])
+}
+
+model Match {
+  id       String   @id @default(cuid())
+  mode     String
+  track    String
+  laps     Int
+  seasonId String?
+  endedAt  DateTime @default(now())
+  season   Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  results MatchResult[]
+}
+
+model MatchResult {
+  id           String  @id @default(cuid())
+  matchId      String
+  /// Nulo para bots e para quem jogou sem conta.
+  userId       String?
+  name         String
+  isBot        Boolean
+  slot         Int
+  position     Int
+  finished     Boolean
+  abandoned    Boolean @default(false)
+  timeTicks    Int?
+  bestLapTicks Int?
+  penaltyTicks Int     @default(0)
+  /// Variação dos pontos de ranqueada nesta partida.
+  pointsDelta  Int?
+  match        Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user         User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  laps LapTime[]
+
+  @@index([userId])
+  @@index([matchId])
+}
+
+model LapTime {
+  id       String      @id @default(cuid())
+  resultId String
+  lap      Int
+  ticks    Int
+  result   MatchResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([resultId])
+}
+
+/// Catálogo de cosméticos que precisam ser possuídos. Id = "slot:chave".
+model CosmeticItem {
+  id      String  @id
+  slot    String
+  key     String
+  name    String
+  /// Entregue a toda conta nova.
+  starter Boolean @default(false)
+
+  owners Inventory[]
+}
+
+model Inventory {
+  userId    String
+  itemId    String
+  /// De onde veio: "starter", "admin" (futuro: "purchase").
+  source    String
+  grantedAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item      CosmeticItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
+}
+
+model EquippedLoadout {
+  userId String @id
+  /// Mapa slot → chave do catálogo do cliente. Só visual: a simulação nunca lê.
+  data   Json
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

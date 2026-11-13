@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+*.log
+.vite/
+coverage/
+# decodificadores copiados de node_modules no postinstall
+apps/client/public/libs/
+# intermediários da conversão de assets
+tools/assets/.tmp/
+
+# Banco de desenvolvimento embutido
+apps/server/.data/
+
+# Material de referência bruto (257 MB, licença do kart não confirmada): fica fora do repositório
+referencias/
