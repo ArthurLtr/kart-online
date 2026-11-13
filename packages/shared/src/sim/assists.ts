@@ -21,15 +21,21 @@ export interface AssistSettings {
   pedalRate: number;
   /** Contra-esterço automático leve quando a traseira escapa (0 = desligado). */
   counterSteer: number;
+  /**
+   * Controle de estabilidade (0 = desligado, 1 = máximo): alivia o acelerador quando a
+   * traseira escapa e dosa o freio com o volante virado ou a roda travando.
+   */
+  stability: number;
 }
 
 /** Padrão para teclado: entrada suavizada, sensação levemente arcade. */
 export const KEYBOARD_ASSISTS: AssistSettings = {
-  steerRate: 3.2,
+  steerRate: 2.8,
   steerReturnRate: 6,
   steerAtTopSpeed: 0.3,
   pedalRate: 5,
-  counterSteer: 0.35,
+  counterSteer: 0.9,
+  stability: 1,
 };
 
 /** Padrão para gamepad: o analógico já dosa; fica só a redução em alta e um pouco de auxílio. */
@@ -39,6 +45,7 @@ export const GAMEPAD_ASSISTS: AssistSettings = {
   steerAtTopSpeed: 0.4,
   pedalRate: 0,
   counterSteer: 0.2,
+  stability: 0.5,
 };
 
 export const NO_ASSISTS: AssistSettings = {
@@ -47,6 +54,7 @@ export const NO_ASSISTS: AssistSettings = {
   steerAtTopSpeed: 1,
   pedalRate: 0,
   counterSteer: 0,
+  stability: 0,
 };
 
 const TOP_SPEED = 30;
@@ -65,7 +73,7 @@ function approach(current: number, target: number, rate: number, dt: number): nu
 export function applyAssists(
   previous: KartInput,
   raw: RawInput,
-  kart: Pick<KartState, 'vx' | 'vy'>,
+  kart: Pick<KartState, 'vx' | 'vy'> & Partial<Pick<KartState, 'rearSlide' | 'wheelSlip'>>,
   dt: number,
   settings: AssistSettings,
 ): KartInput {
@@ -88,19 +96,34 @@ export function applyAssists(
     returning ? settings.steerReturnRate : settings.steerRate,
     dt,
   );
+  let throttleTarget = Math.max(0, Math.min(1, raw.throttle));
+  let brakeTarget = Math.max(0, Math.min(1, raw.brake));
+  if (settings.stability > 0 && speed > 4 && !raw.drift) {
+    // Quanto a traseira já escapou: 0 abaixo de ~4° de deriva, 1 a partir de ~12°.
+    const angle = Math.abs(Math.atan2(kart.vy, speed));
+    const loose = Math.min(1, Math.max((angle - 0.07) / 0.14, kart.rearSlide ?? 0, 0));
+    throttleTarget *= 1 - settings.stability * 0.85 * loose;
+    // Controle de tração: roda patinando perde aderência lateral e a traseira sai.
+    const spinning = Math.min(1, (kart.wheelSlip ?? 0) / 0.5);
+    if (raw.brake <= 0) throttleTarget *= 1 - settings.stability * 0.6 * spinning;
+    // O freio é só atrás: com o volante virado ou a roda travando, o pedal todo rodaria o kart.
+    const turning = Math.min(1, Math.abs(previous.steer) / 0.3);
+    const locking = raw.brake > 0 ? Math.min(1, (kart.wheelSlip ?? 0) / 0.4) : 0;
+    brakeTarget *=
+      1 - settings.stability * Math.min(0.85, 0.7 * turning + 0.5 * loose + 0.4 * locking);
+  }
+
   return {
     steer,
-    throttle: approach(
-      previous.throttle,
-      Math.max(0, Math.min(1, raw.throttle)),
-      settings.pedalRate,
-      dt,
-    ),
+    throttle:
+      throttleTarget < previous.throttle
+        ? throttleTarget // aliviar é imediato
+        : approach(previous.throttle, throttleTarget, settings.pedalRate, dt),
     // Soltar o freio é imediato; apertar é que é progressivo.
     brake:
-      raw.brake < previous.brake
-        ? Math.max(0, raw.brake)
-        : approach(previous.brake, Math.min(1, raw.brake), settings.pedalRate * 1.5, dt),
+      brakeTarget < previous.brake
+        ? brakeTarget
+        : approach(previous.brake, brakeTarget, settings.pedalRate * 1.5, dt),
     drift: raw.drift,
   };
 }

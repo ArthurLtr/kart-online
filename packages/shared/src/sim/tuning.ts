@@ -67,7 +67,7 @@ export const TUNING = {
 
   // --- freio (só no eixo traseiro, como num kart de verdade) -----------------
   /** Pedal no fundo fica logo abaixo do travamento em reta com pneus quentes; em curva ou a frio, trava. */
-  brakeForce: 1050,
+  brakeForce: 1250,
 
   // --- pneus ----------------------------------------------------------------
   /** Curva de aderência: F = mu·Fz·sin(C·atan(B·escorregamento)). Pico em ~8°. */
@@ -76,20 +76,20 @@ export const TUNING = {
   /** Ângulo de deriva de pico, rad (usado para medir o quanto a traseira desliza). */
   peakSlipAngle: 0.14,
   /** Leve tendência a sair de frente. */
-  frontGripFactor: 0.95,
+  frontGripFactor: 0.93,
   /** Fração da transferência de peso longitudinal que muda a força lateral dos pneus. */
   lateralLoadTransfer: 0.3,
   /** Abaixo disto o ângulo de deriva usa esta velocidade (evita divisão por ~0), m/s. */
   minSlipSpeed: 1.5,
   /** Roda traseira patinando ou travada: fração da aderência longitudinal e lateral que sobra. */
   slidingLongitudinal: 0.78,
-  slidingLateral: 0.45,
+  slidingLateral: 0.72,
   /** Quanto acelerar ou frear no limite tira da aderência lateral traseira (1 = círculo de atrito puro). */
-  combinedSlip: 0.62,
+  combinedSlip: 0.45,
   /** Botão de drift: aderência traseira que sobra. Só solta a traseira, não dá velocidade. */
   driftRearGrip: 0.72,
   /** Pneus frios na largada: fração da aderência; aquecem rodando e deslizando. */
-  coldGrip: 0.55,
+  coldGrip: 0.7,
   warmupPerMeter: 0.005,
   warmupPerSlide: 0.25,
 
@@ -123,11 +123,11 @@ export const TUNING = {
  * sempre dá para sair andando.
  */
 export const SURFACES: Record<Surface, { grip: number; rolling: number; drag: number }> = {
-  asphalt: { grip: 1.55, rolling: 0.018, drag: 0 },
-  curb: { grip: 1.35, rolling: 0.028, drag: 0 },
-  grass: { grip: 0.62, rolling: 0.07, drag: 28 },
-  gravel: { grip: 0.5, rolling: 0.12, drag: 48 },
-  out: { grip: 0.62, rolling: 0.07, drag: 28 },
+  asphalt: { grip: 1.9, rolling: 0.018, drag: 0 },
+  curb: { grip: 1.7, rolling: 0.028, drag: 0 },
+  grass: { grip: 0.95, rolling: 0.07, drag: 28 },
+  gravel: { grip: 0.85, rolling: 0.1, drag: 40 },
+  out: { grip: 0.95, rolling: 0.07, drag: 28 },
 };
 
 /** Regras de largada, volta e reposicionamento, em ticks de 1/60 s. */
@@ -141,7 +141,9 @@ export const RACE_RULES = {
   /** Acelerar acima disto antes de as luzes apagarem é queima de largada. */
   jumpStartThrottle: 0.15,
   jumpStartPenaltyTicks: 180,
-  /** Fora da pista ou preso por este tempo: volta para o meio da pista. */
+  /** Preso (sem andar) por este tempo: volta para o meio da pista. */
   resetAfterTicks: 180,
+  /** Fora da pista por este tempo seguido: idem. Folgado, para dar tempo de voltar dirigindo. */
+  offTrackResetTicks: 420,
   stuckSpeed: 1,
 } as const;

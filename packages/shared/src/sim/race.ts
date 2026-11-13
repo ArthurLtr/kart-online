@@ -198,7 +198,7 @@ export function stepRace(
     next.offTrackTicks = offTrack ? previous.offTrackTicks + 1 : 0;
     const trying = input.throttle > 0.3 || input.brake > 0.3;
     next.stuckTicks = trying && speedOf(kart) < R.stuckSpeed ? previous.stuckTicks + 1 : 0;
-    if (next.offTrackTicks >= R.resetAfterTicks || next.stuckTicks >= R.resetAfterTicks) {
+    if (next.offTrackTicks >= R.offTrackResetTicks || next.stuckTicks >= R.resetAfterTicks) {
       karts[i] = reposition(kart, track);
       next.offTrackTicks = 0;
       next.stuckTicks = 0;

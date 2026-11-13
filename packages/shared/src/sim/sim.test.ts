@@ -150,7 +150,7 @@ describe('física do kart', () => {
     expect(Math.abs(drift.vy)).toBeGreaterThan(Math.abs(grip.vy));
   });
 
-  it('na largada, acelerador no fundo patina e dosar sai melhor', () => {
+  it('na largada, o pneu frio aguenta o acelerador no fundo, sem impulso extra', () => {
     const grid = createKartState(0, 0, 0); // pneus frios, como no grid
     let spun = 0;
     const full = simulate(
@@ -162,12 +162,13 @@ describe('física do kart', () => {
       2.5,
     );
     const dosed = simulate(grid, { ...FULL, throttle: 0.9 }, 2.5);
-    expect(spun).toBeGreaterThan(0.2);
-    expect(dosed.distance).toBeGreaterThan(full.distance);
+    // Largar é simples: pé no fundo não patina e é a melhor saída.
+    expect(spun).toBeLessThan(0.2);
+    expect(full.distance).toBeGreaterThan(dosed.distance);
     // Não existe impulso de largada: ninguém sai mais rápido do que o motor permite.
     const peakForce =
       (24 * TUNING.gearRatio * TUNING.drivetrainEfficiency) / TUNING.wheelRadius / TUNING.mass;
-    expect(dosed.final.vx).toBeLessThan(peakForce * 2.5);
+    expect(full.final.vx).toBeLessThan(peakForce * 2.5);
   });
 
   it('fora do asfalto o kart perde velocidade', () => {

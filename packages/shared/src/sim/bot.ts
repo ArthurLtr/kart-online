@@ -35,10 +35,11 @@ export function racingLine(track: Track, maxOffset = 3.4): Float32Array {
 export function createBotPlan(track: Track, skill: number): BotPlan {
   const n = track.samples.length;
   const offset = racingLine(track);
-  // Fração da aderência usada: acima de ~0,8 o kart real já escorrega (pneu dianteiro satura antes).
-  const use = 0.6 + 0.18 * Math.min(1, Math.max(0, skill));
+  // Fração da aderência usada. Fica longe do limite de propósito: a folga é o que
+  // perdoa o jogador que entra um pouco rápido demais na curva.
+  const use = 0.55 + 0.17 * Math.min(1, Math.max(0, skill));
   const lateral = SURFACES.asphalt.grip * T.gravity * use;
-  const braking = 5 * use;
+  const braking = 5.4 * use;
   const top = 31;
   const speed = new Float32Array(n);
   for (let i = 0; i < n; i++) {
