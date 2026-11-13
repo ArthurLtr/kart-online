@@ -5,7 +5,7 @@ import { createTrackEnvironment, getCircuitoDaOrla, speedOf } from '@kart/shared
 import { KartAudio } from '../audio/kartAudio';
 import type { Loadout } from '../cosmetics/catalog';
 import { findDesign } from '../cosmetics/catalog';
-import { loadPaint } from '../cosmetics/paint';
+import type { KartPaint } from '../cosmetics/paint';
 import { EffectsPool, KartEffects } from '../fx/kartEffects';
 import { Trail } from '../fx/trail';
 import type { Driver } from '../models/driver';
@@ -93,14 +93,18 @@ export class RaceView {
   /**
    * Monta os karts da corrida, um por vaga, com os cosméticos de cada um.
    * `focus` é o kart do jogador (o único com marcas de derrapagem).
+   * @param paints pintura livre de cada vaga (`null` = pintura do catálogo)
    */
-  async setRoster(loadouts: readonly Loadout[], focus: number): Promise<void> {
+  async setRoster(
+    loadouts: readonly Loadout[],
+    focus: number,
+    paints: readonly (KartPaint | null)[] = [],
+  ): Promise<void> {
     this.clearRoster();
     const version = this.rosterVersion;
     const drivers = await Promise.all(
-      // A pintura livre ainda é local: só o kart do jogador a recebe.
       loadouts.map((loadout, index) =>
-        createDriver(this.context.models, loadout, index === focus ? loadPaint() : null),
+        createDriver(this.context.models, loadout, paints[index] ?? null),
       ),
     );
     if (this.disposed || version !== this.rosterVersion) {

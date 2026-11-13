@@ -11,6 +11,7 @@ import {
   stepRace,
 } from '@kart/shared';
 import { loadLoadout } from '../cosmetics/catalog';
+import { loadPaint } from '../cosmetics/paint';
 import { RaceView } from '../game/raceView';
 import { Controls } from '../input/controls';
 import { createHud, formatTime } from '../ui/hud';
@@ -85,7 +86,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
 
   restart();
   context.setStatus(`Treino solo · ${track.definition.name}`);
-  view.setRoster([loadLoadout()], 0).catch((erro: unknown) => {
+  view.setRoster([loadLoadout()], 0, [loadPaint()]).catch((erro: unknown) => {
     console.error(erro);
     context.setStatus('Não foi possível carregar o kart. Rode "pnpm assets" e recarregue.', true);
   });

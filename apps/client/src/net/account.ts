@@ -1,7 +1,18 @@
-import type { AuthResponse, Cosmetics, MeResponse, QueueStatus, RankingEntry } from '@kart/shared';
+import type {
+  AuthResponse,
+  Cosmetics,
+  CustomPaint,
+  MeResponse,
+  QueueStatus,
+  RankingEntry,
+} from '@kart/shared';
 import { COSMETIC_ITEMS, SERVER_DEFAULT_PORT } from '@kart/shared';
 import type { Loadout } from '../cosmetics/catalog';
 import { CATALOG, loadLoadout, saveLoadout } from '../cosmetics/catalog';
+import type { KartPaint } from '../cosmetics/paint';
+import { loadPaint, sanitizePaint, savePaint } from '../cosmetics/paint';
+import type { Preset } from '../cosmetics/presets';
+import { loadPresets, presetsData, savePresets, toPresets } from '../cosmetics/presets';
 
 const TOKEN_KEY = 'kart-online.token';
 
@@ -91,6 +102,16 @@ export async function refreshAccount(): Promise<MeResponse | null> {
   try {
     me = await request<MeResponse>('GET', '/api/me');
     adoptLoadout(me.loadout);
+    if (me.paint === undefined) {
+      // Conta que nunca gravou pintura nem presets: o que está neste navegador sobe para ela.
+      const paint = loadPaint();
+      const presets = loadPresets();
+      if (paint || presets.length > 0)
+        void saveAccountLook(loadLoadout(), paint, presets).catch(() => undefined);
+    } else {
+      savePaint(sanitizePaint(me.paint));
+      savePresets(toPresets(me.presets));
+    }
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) setToken(null);
     else throw error;
@@ -116,11 +137,23 @@ export function logout(): void {
   setToken(null);
 }
 
-/** Grava o loadout na conta. O servidor recusa item que a conta não possui. */
-export async function saveAccountLoadout(loadout: Loadout): Promise<void> {
+/**
+ * Grava na conta o visual aplicado (loadout e pintura livre) e os presets.
+ * O servidor recusa item que a conta não possui.
+ */
+export async function saveAccountLook(
+  loadout: Loadout,
+  paint: KartPaint | null,
+  presets: readonly Preset[],
+): Promise<void> {
   if (!token) return;
-  await request('PUT', '/api/loadout', { loadout });
-  if (me) me.loadout = { ...loadout };
+  const data = presetsData(presets);
+  await request('PUT', '/api/loadout', { loadout, paint, presets: data });
+  if (me) {
+    me.loadout = { ...loadout };
+    me.paint = paint as CustomPaint | null;
+    me.presets = data;
+  }
 }
 
 export const fetchRanking = async (): Promise<RankingEntry[]> =>

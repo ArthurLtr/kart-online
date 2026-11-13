@@ -3,6 +3,7 @@ import type { Room } from 'colyseus.js';
 import type {
   InputMessage,
   JoinOptions,
+  PaintsMessage,
   PingMessage,
   RoomMessage,
   SnapshotMessage,
@@ -19,6 +20,8 @@ export interface NetConditions {
 
 export interface ConnectionHandlers {
   onRoom(message: RoomMessage): void;
+  /** Pintura livre de cada vaga; chega antes da mensagem de sala correspondente. */
+  onPaints(message: PaintsMessage): void;
   onSnapshot(message: SnapshotMessage): void;
   /** A conexão caiu; `willRetry` indica que a reconexão automática está em andamento. */
   onDisconnect(willRetry: boolean): void;
@@ -71,6 +74,9 @@ export class Connection {
     this.room = room;
     room.onMessage(MESSAGES.room, (message: RoomMessage) => {
       this.deliver(() => this.handlers.onRoom(message), false);
+    });
+    room.onMessage(MESSAGES.paints, (message: PaintsMessage) => {
+      this.deliver(() => this.handlers.onPaints(message), false);
     });
     room.onMessage(MESSAGES.snapshot, (message: SnapshotMessage) => {
       this.deliver(() => this.handlers.onSnapshot(message), true);

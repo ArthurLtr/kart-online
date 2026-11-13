@@ -126,15 +126,23 @@ describe('cosméticos não entram na simulação', () => {
     const plain = new RaceSession(track, { ...quick, mode: 'private' });
     const fancy = new RaceSession(track, { ...quick, mode: 'private' });
     plain.addPlayer('ana', 'Ana', {});
-    fancy.addPlayer('ana', 'Ana', {
-      livery: 'vermelho',
-      suit: 'largada',
-      helmetModel: 'aero',
-      helmetPaint: 'crepusculo',
-      visor: 'dourada',
-      rim: 'ouro',
-      trail: 'arco-iris',
-    });
+    fancy.addPlayer(
+      'ana',
+      'Ana',
+      {
+        livery: 'vermelho',
+        suit: 'largada',
+        helmetModel: 'aero',
+        helmetPaint: 'crepusculo',
+        visor: 'dourada',
+        rim: 'ouro',
+        trail: 'arco-iris',
+      },
+      null,
+      { number: '27', stickers: [{ shape: 'star', size: 1 }], wheels: { color: '#dcff2e' } },
+    );
+    expect(fancy.paints()[0]).toMatchObject({ number: '27' });
+    expect(plain.paints()[0]).toBeNull();
     // Mesma sequência de comandos nas duas salas, com curva, freio e drift.
     const command = (tick: number) => ({
       seq: tick,

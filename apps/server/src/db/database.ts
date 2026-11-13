@@ -27,7 +27,7 @@ function reachable(host: string, port: number): Promise<boolean> {
  * Fica rodando como serviço à parte, então sobrevive aos reinícios do servidor;
  * os dados ficam em apps/server/.data/pg. Para parar: pnpm db:stop.
  */
-async function startEmbedded(url: URL): Promise<void> {
+async function startEmbedded(url: URL, restart = false): Promise<void> {
   const require = createRequire(import.meta.url);
   const platform = process.platform === 'win32' ? 'windows' : process.platform;
   const binaries = (await import(
@@ -60,7 +60,7 @@ async function startEmbedded(url: URL): Promise<void> {
     rmSync(passwordFile);
   }
   run(binaries.pg_ctl, [
-    'start',
+    restart ? 'restart' : 'start',
     '-w',
     '-D',
     dataDir,
@@ -107,7 +107,16 @@ export async function openDatabase(): Promise<PrismaClient> {
   }
   if (!config.production) {
     console.log('[banco] conferindo tabelas…');
-    pushSchema();
+    try {
+      pushSchema();
+    } catch (error) {
+      // O PostgreSQL embutido às vezes fica de pé sem aceitar conexões (no Windows,
+      // quando o terminal que o iniciou fecha). Reiniciar resolve; os dados ficam.
+      if (!local || !existsSync(join(SERVER_ROOT, '.data', 'pg', 'PG_VERSION'))) throw error;
+      console.log('[banco] sem resposta: reiniciando o PostgreSQL embutido…');
+      await startEmbedded(url, true);
+      pushSchema();
+    }
   }
   const prisma = new PrismaClient({ datasourceUrl: config.databaseUrl });
   await seed(prisma);

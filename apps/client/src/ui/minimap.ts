@@ -63,14 +63,14 @@ export function createMinimap(track: Track): Minimap {
     pen.strokeStyle = 'rgba(8, 10, 14, 0.75)';
     pen.lineWidth = 9;
     pen.stroke();
-    pen.strokeStyle = 'rgba(236, 240, 246, 0.92)';
+    pen.strokeStyle = 'rgba(245, 244, 240, 0.9)';
     pen.lineWidth = 4.5;
     pen.stroke();
     // Linha de chegada.
     const start = track.grid[0];
     if (start) {
       const { u, v } = project(start.x, start.z);
-      pen.fillStyle = '#ff5a3c';
+      pen.fillStyle = '#dcff2e';
       pen.fillRect(u - 2, v - 6, 4, 12);
     }
   }
@@ -90,8 +90,8 @@ export function createMinimap(track: Track): Minimap {
           if (dot.own !== pass) continue;
           const { u, v } = project(dot.x, dot.z);
           context.beginPath();
-          context.arc(u, v, dot.own ? 5 : 3.6, 0, Math.PI * 2);
-          context.fillStyle = dot.own ? '#ffd23c' : '#4fb4ff';
+          context.arc(u, v, dot.own ? 5.5 : 3.4, 0, Math.PI * 2);
+          context.fillStyle = dot.own ? '#dcff2e' : '#f5f4f0';
           context.fill();
           context.lineWidth = 1.5;
           context.strokeStyle = '#0b0d11';

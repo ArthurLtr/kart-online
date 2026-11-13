@@ -1,116 +1,9 @@
 /* --- treino e corrida: HUD ----------------------------------------------- */
 #tela-ui[data-tela='treino'],
-#tela-ui[data-tela='conta'],
 #tela-ui[data-tela='corrida'] {
   flex: 1;
   min-height: 0;
   position: relative;
-}
-
-.hud-posicao {
-  font-size: 26px;
-  font-weight: 800;
-}
-
-.hud-posicao:empty {
-  display: none;
-}
-
-/* --- corrida online: lobby, resultado e depuração ------------------------- */
-.online-painel {
-  position: absolute;
-  top: 6%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(460px, 92%);
-  max-height: 86%;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: auto;
-  background: rgb(12 14 20 / 88%);
-  border: 1px solid var(--linha);
-  border-radius: var(--raio);
-  padding: 16px 18px;
-  backdrop-filter: blur(8px);
-}
-
-.online-painel[hidden],
-.depuracao[hidden] {
-  display: none;
-}
-
-.online-painel h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.online-painel p,
-.online-painel ol {
-  margin: 0;
-  opacity: 1 !important;
-  text-shadow: none !important;
-}
-
-.online-painel ol {
-  padding-left: 22px;
-  line-height: 1.7;
-}
-
-.online-painel .erro {
-  color: var(--perigo);
-}
-
-.online-painel .nota {
-  opacity: 0.7 !important;
-}
-
-.online-painel .codigo {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  user-select: all;
-}
-
-.online-painel label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.online-painel input:not([type='checkbox'], [type='range']) {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  padding: 7px 10px;
-  border-radius: var(--raio);
-  border: 1px solid var(--linha);
-  background: rgb(255 255 255 / 8%);
-  color: inherit;
-}
-
-.online-painel input:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 1px;
-}
-
-.online-painel table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.online-painel th,
-.online-painel td {
-  text-align: left;
-  padding: 4px 6px;
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
-}
-
-.online-painel tr.voce td {
-  color: var(--acento);
-  font-weight: 700;
 }
 
 .depuracao {
@@ -141,236 +34,241 @@
   margin-top: 6px;
 }
 
+/* --- HUD da corrida ---------------------------------------------------------- */
+
 .hud {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto 1fr auto auto;
-  gap: 8px;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--e3);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 4px rgb(0 0 0 / 75%);
+  pointer-events: none;
 }
 
-.hud p {
+.hud[hidden] {
+  display: none;
+}
+
+#tela-ui .hud p {
   margin: 0;
-  opacity: 1;
 }
 
-.hud-tempos {
-  grid-column: 2;
-  text-align: right;
-  background: var(--superficie);
+.hud-lugar,
+.hud-tempos,
+.hud-painel {
+  padding: var(--e3) var(--e4);
   border: 1px solid var(--linha);
-  border-radius: var(--raio);
-  padding: 8px 12px;
-  line-height: 1.5;
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+  backdrop-filter: var(--desfoque);
+}
+
+/* posição e volta: canto de cima, à esquerda */
+.hud-lugar {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: start;
+  display: grid;
+  gap: var(--e1);
+  border-left: 3px solid var(--acento);
+}
+
+.hud-posicao {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--fonte-titulo);
+  font-style: italic;
+  line-height: 0.9;
+}
+
+.hud-posicao[hidden] {
+  display: none;
+}
+
+.hud-posicao strong {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+}
+
+.hud-posicao span {
+  color: var(--texto-2);
+  font-size: var(--t-xl);
+  font-weight: 600;
+}
+
+.hud-mudou strong {
+  animation: hud-pulso var(--lento) var(--curva);
+}
+
+@keyframes hud-pulso {
+  from {
+    color: var(--acento);
+    transform: scale(1.25);
+  }
+}
+
+.hud-posicao strong {
+  display: inline-block;
+  transform-origin: left bottom;
 }
 
 .hud-volta {
-  font-weight: 700;
   color: var(--acento);
+  font: 600 var(--t-l) / 1 var(--fonte-titulo);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* avisos: no alto, no centro */
+.hud-aviso {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  max-width: 46vw;
+  padding: var(--e2) var(--e5);
+  background: var(--acento);
+  color: var(--acento-tinta);
+  font: italic 700 clamp(1.125rem, 2.6vw, 1.75rem) / 1.1 var(--fonte-titulo);
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+  clip-path: polygon(var(--corte) 0, 100% 0, calc(100% - var(--corte)) 100%, 0 100%);
+}
+
+.hud-aviso:empty {
+  display: none;
+}
+
+.hud-aviso[data-alerta='true'] {
+  background: var(--perigo);
+  color: #1b0502;
+}
+
+/* tempos e minimapa: canto de cima, à direita */
+.hud-tempos {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  justify-self: end;
+  align-self: start;
+  display: grid;
+  gap: var(--e1);
+  width: 176px;
 }
 
 .hud-tempo {
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.hud-aviso {
-  grid-column: 1 / 3;
-  grid-row: 2;
-  align-self: start;
-  justify-self: center;
-  margin-top: 6vh !important;
-  font-size: clamp(18px, 3.2vw, 30px);
-  font-weight: 800;
+  font: italic 700 var(--t-xl) / 1 var(--fonte-titulo);
   letter-spacing: 0.02em;
-  text-align: center;
+  text-align: right;
 }
 
+.hud-linha {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--e2);
+  font-size: var(--t-s);
+}
+
+.hud-linha span {
+  color: var(--texto-3);
+  font-size: var(--t-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hud-linha b {
+  font-weight: 600;
+}
+
+.hud-minimapa {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  margin-top: var(--e2);
+  border-top: 1px solid var(--linha);
+}
+
+/* velocímetro: canto de baixo, à direita */
 .hud-painel {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 3;
   justify-self: end;
-  min-width: 170px;
+  display: grid;
+  gap: var(--e1);
+  min-width: 176px;
   text-align: right;
-  background: var(--superficie);
-  border: 1px solid var(--linha);
-  border-radius: var(--raio);
-  padding: 8px 12px;
 }
 
 .hud-velocidade {
-  display: inline;
-  font-size: 44px;
-  font-weight: 800;
-  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--e2);
+}
+
+.hud-velocidade strong {
+  font: italic 700 clamp(2.75rem, 7vw, 4.5rem) / 0.85 var(--fonte-titulo);
 }
 
 .hud-unidade {
-  margin-left: 6px;
-  opacity: 0.8;
+  color: var(--texto-2);
+  font: 600 var(--t-s) / 1 var(--fonte);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .hud-giro {
-  height: 8px;
-  margin: 6px 0;
-  border-radius: 4px;
-  background: rgb(255 255 255 / 18%);
-  overflow: hidden;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  height: 10px;
+  margin-top: var(--e1);
 }
 
-.hud-giro div {
-  height: 100%;
-  background: #7fd4ff;
-  transform-origin: left center;
+.hud-giro i {
+  background: var(--superficie-3);
+  transform: skewX(-18deg);
 }
 
-.hud-giro div[data-alto='true'] {
-  background: #ff5a4f;
+.hud-giro i[data-aceso='true'] {
+  background: var(--acento);
+}
+
+.hud-giro i[data-alto='true'][data-aceso='true'] {
+  background: var(--perigo);
+}
+
+.hud-rpm {
+  color: var(--texto-3);
+  font-size: var(--t-xs);
+}
+
+.hud-pneus {
+  justify-self: end;
+  color: var(--texto-3);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .hud-pneus[data-frio='true'] {
-  color: #9fd8ff;
+  color: var(--frio);
 }
 
 .hud-ajuda {
   grid-column: 1 / 3;
-  grid-row: 4;
-  font-size: 12px;
-  opacity: 0.8 !important;
+  grid-row: 3;
+  align-self: end;
+  color: var(--texto-2);
+  font-size: var(--t-xs);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
 }
 
-/* --- painéis das telas antigas -------------------------------------------- */
-.painel {
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.painel fieldset {
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.painel legend {
-  padding: 0;
-  margin-bottom: 6px;
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-/* --- conta: entrar, perfil, inventário e ranking --------------------------- */
-.conta-painel {
-  width: min(880px, calc(100% - 32px));
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
-}
-
-.conta-painel h3 {
-  margin: 14px 0 6px;
-  font-size: 15px;
-}
-
-.conta-colunas {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 8px 24px;
-  align-items: start;
-}
-
-.conta-form {
-  display: grid;
-  gap: 8px;
-}
-
-.conta-form label {
-  display: grid;
-  gap: 3px;
-  align-items: stretch;
-}
-
-.conta-itens {
-  margin: 0;
-  padding-left: 18px;
-  line-height: 1.6;
-}
-
-.conta-itens .bloqueado {
-  opacity: 0.5;
-}
-
-.botoes button.bloqueado::after {
-  content: ' 🔒';
-}
-
-.config {
-  pointer-events: auto;
-  padding: 16px 18px;
-  border-radius: var(--raio);
-  background: rgb(14 16 20 / 82%);
-  max-height: calc(100vh - 110px);
-  overflow-y: auto;
-  width: min(520px, calc(100vw - 32px));
-}
-
-.config h2 {
-  margin: 0 0 8px;
-}
-
-.config label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.config input[type='range'] {
-  flex: 1;
-}
-
-.config table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.config th {
-  text-align: left;
-  font-weight: 500;
-  padding: 4px 8px 4px 0;
-}
-
-.config td {
-  padding: 3px;
-}
-
-.config td button {
-  width: 100%;
-  min-width: 96px;
-}
-
-.config .nota {
-  font-size: 0.85rem;
-  opacity: 0.8;
-}
-
-.hud-minimapa {
-  position: absolute;
-  top: 78px;
-  right: 16px;
-  width: 168px;
-  height: 168px;
-  border-radius: var(--raio);
-  background: rgba(10, 12, 16, 0.45);
-}
-
-.hud-rpm {
-  font-size: 0.8rem;
-  opacity: 0.85;
-  font-variant-numeric: tabular-nums;
-}
+/* --- nomes sobre os karts ------------------------------------------------------ */
 
 .nomes {
   position: absolute;
@@ -381,14 +279,15 @@
 
 .nomes span {
   position: absolute;
-  left: 0;
   top: 0;
-  padding: 1px 7px;
-  border-radius: var(--raio);
-  background: rgba(10, 12, 16, 0.6);
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 600;
+  left: 0;
+  padding: 2px 8px 2px 6px;
+  border-left: 2px solid var(--acento);
+  background: rgb(7 8 10 / 72%);
+  color: var(--texto);
+  font: italic 600 var(--t-m) / 1.2 var(--fonte-titulo);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   will-change: transform;
 }
@@ -397,7 +296,31 @@
   display: none;
 }
 
-.online-painel .rating {
-  font-weight: 600;
-  color: var(--acento);
+/* --- janelas estreitas ---------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .hud-tempos {
+    width: 132px;
+    padding: var(--e2) var(--e3);
+  }
+
+  .hud-painel {
+    min-width: 132px;
+    padding: var(--e2) var(--e3);
+  }
+
+  .hud-lugar {
+    padding: var(--e2) var(--e3);
+  }
+
+  .hud-ajuda,
+  .hud-rpm {
+    display: none;
+  }
+}
+
+@media (max-height: 520px) {
+  .hud-minimapa {
+    display: none;
+  }
 }

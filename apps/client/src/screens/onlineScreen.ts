@@ -1,5 +1,6 @@
 import type {
   Cosmetics,
+  CustomPaint,
   KartInput,
   KartState,
   RoomMessage,
@@ -18,8 +19,12 @@ import {
   startLights,
 } from '@kart/shared';
 import type { Loadout } from '../cosmetics/catalog';
+import { loadPaint, sanitizePaint } from '../cosmetics/paint';
 import type { QueueStatus } from '@kart/shared';
-import { queue, refreshAccount, sessionToken } from '../net/account';
+import { currentAccount, queue, refreshAccount, sessionToken } from '../net/account';
+import { btn, el } from '../ui/dom';
+import { block, field } from '../ui/sections';
+import { updatePilot } from '../ui/shell';
 import { getSettings } from '../settings';
 import { createNameTags } from '../ui/nameTags';
 import type { PlayIntent } from './menuScreen';
@@ -34,7 +39,6 @@ import { LocalPredictor } from '../net/prediction';
 import { createDebugPanel } from '../ui/debugPanel';
 import { createHud, formatTime } from '../ui/hud';
 import type { AppContext, GameScreen } from './types';
-import { button } from './types';
 
 const NAME_KEY = 'kart-online.apelido';
 const MAX_STEPS_PER_FRAME = 5;
@@ -83,10 +87,15 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   /** Tick do servidor estimado para "agora" (fracionário), para interpolar os outros karts. */
   let serverTick = 0;
   let rosterKey = '';
+  /** Pintura livre de cada vaga, como o servidor repassou. */
+  let paints: readonly (CustomPaint | null)[] = [];
   let lastLapSeen: number | null = null;
 
   const connection = new Connection({
     onRoom: (message) => applyRoom(message),
+    onPaints: (message) => {
+      paints = message.paints;
+    },
     onSnapshot: (message) => applySnapshot(message),
     onDisconnect: (willRetry) => {
       if (disposed) return;
@@ -125,17 +134,26 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   const debug = createDebugPanel(ui, connection.conditions);
   ui.append(panel);
 
-  const heading = (text: string): void => {
-    const title = document.createElement('h2');
-    title.textContent = text;
-    panel.append(title);
+  /** Cabeçalho do painel: linha pequena, título e (opcional) uma frase. */
+  const heading = (kicker: string, title: string, note = ''): void => {
+    const top = el('header', 'gar-itens-topo');
+    top.append(el('p', 'sobretitulo', kicker), el('h2', 'gar-titulo', title));
+    if (note) top.append(el('p', 'nota', note));
+    panel.append(top);
   };
   const paragraph = (text: string, className = ''): HTMLParagraphElement => {
-    const node = document.createElement('p');
-    node.textContent = text;
-    node.className = className;
+    const node = el('p', className, text);
     panel.append(node);
     return node;
+  };
+  /** O que está desenhado no painel; igual = só o contador muda (o foco não se perde). */
+  let renderedKey = '';
+  let countdown: HTMLElement | null = null;
+  const clearPanel = (key = ''): void => {
+    renderedKey = key;
+    countdown = null;
+    panel.hidden = false;
+    panel.replaceChildren();
   };
 
   let queueTimer = 0;
@@ -148,17 +166,19 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   function startQueue(): void {
     audio.unlock();
     phase = 'connecting';
-    panel.replaceChildren();
-    heading('Ranqueado');
-    const info = paragraph('Entrando na fila…');
-    const actions = document.createElement('div');
-    actions.className = 'botoes';
-    button(actions, 'Sair da fila', () => {
+    clearPanel();
+    heading('Ranqueado', 'Na fila');
+    const info = paragraph('Entrando na fila…', 'fila-estado');
+    info.setAttribute('role', 'status');
+    const actions = el('div', 'botoes');
+    const leave = btn('', 'Sair da fila', () => {
       stopQueue();
       void queue.leave().catch(() => {});
       showMenu();
     });
+    actions.append(leave);
     panel.append(actions);
+    leave.focus({ preventScroll: true });
     const fail = (erro: unknown): void => {
       stopQueue();
       if (!disposed) showMenu(erro instanceof Error ? erro.message : 'Erro na fila.');
@@ -166,7 +186,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     const onStatus = (status: QueueStatus): void => {
       if (disposed || phase !== 'connecting') return;
       if (status.state === 'waiting') {
-        info.textContent = `Procurando pilotos do seu nível… ${status.waitedSeconds} s (faixa de ±${status.band} pontos)`;
+        info.textContent = `Procurando pilotos do seu nível… ${status.waitedSeconds} s · faixa de ±${status.band} pontos`;
         if (!queueTimer) {
           queueTimer = window.setInterval(() => {
             queue.status().then(onStatus).catch(fail);
@@ -191,20 +211,23 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     predictor = null;
     rosterKey = '';
     view.clearRoster();
-    panel.hidden = false;
-    panel.replaceChildren();
-    heading('Corrida online');
-    if (error) paragraph(error, 'erro');
+    hud.setVisible(false);
+    clearPanel();
+    heading('Corrida online', 'Escolha o modo');
+    if (error) paragraph(error, 'erro').setAttribute('role', 'alert');
 
-    const nameLabel = document.createElement('label');
-    const nameInput = document.createElement('input');
+    const account = currentAccount();
+    const nameInput = el('input');
     nameInput.type = 'text';
     nameInput.maxLength = 16;
-    nameInput.value = storedName();
+    nameInput.value = account?.user.name ?? storedName();
     nameInput.placeholder = 'Piloto';
     nameInput.setAttribute('autocomplete', 'nickname');
-    nameLabel.append('Apelido ', nameInput);
-    panel.append(nameLabel);
+    // Com conta, o servidor usa o apelido gravado nela.
+    nameInput.disabled = account !== null;
+    panel.append(
+      field('Apelido', nameInput, account ? 'O apelido vem do seu perfil.' : 'Até 16 caracteres.'),
+    );
 
     const join = (mode: RoomMode, code?: string): void => {
       const name = nameInput.value.trim() || 'Piloto';
@@ -215,14 +238,15 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       }
       audio.unlock();
       phase = 'connecting';
-      panel.replaceChildren();
-      heading('Conectando…');
+      clearPanel();
+      heading('Corrida online', 'Conectando…');
       connection
         .join(
           {
             name,
             mode,
             cosmetics: { ...loadLoadout() },
+            paint: loadPaint() as CustomPaint | null,
             // Com conta, o servidor usa o nome e os cosméticos gravados nela.
             ...(sessionToken() ? { token: sessionToken() as string } : {}),
           },
@@ -240,102 +264,168 @@ export function createOnlineScreen(context: AppContext): GameScreen {
         });
     };
 
-    const modes = document.createElement('div');
-    modes.className = 'botoes';
-    const casual = button(modes, 'Casual (com bots)', () => join('casual'));
-    casual.className = 'primario';
-    button(modes, 'Ranqueado', startQueue);
-    button(modes, 'Criar sala privada', () => join('private'));
+    const modes = el('div', 'modos-lista');
+    const mode = (title: string, summary: string, action: () => void): HTMLButtonElement => {
+      const button = btn('modo-linha', '', action);
+      button.append(el('strong', '', title), el('small', '', summary));
+      modes.append(button);
+      return button;
+    };
+    const casual = mode('Casual', 'Entra agora. Bots completam o grid até 9.', () =>
+      join('casual'),
+    );
+    mode('Ranqueado', 'Vale pontos na temporada. Exige conta com e-mail.', startQueue);
+    mode('Sala privada', 'Cria uma sala e gera um código para chamar os amigos.', () =>
+      join('private'),
+    );
     panel.append(modes);
 
-    const codeRow = document.createElement('form');
-    codeRow.className = 'botoes';
-    const codeInput = document.createElement('input');
+    const codeRow = el('form', 'codigo-form');
+    const codeInput = el('input');
     codeInput.type = 'text';
     codeInput.maxLength = 12;
     codeInput.placeholder = 'Código de convite';
     codeInput.setAttribute('aria-label', 'Código de convite');
-    const codeButton = document.createElement('button');
+    const codeButton = el('button', '', 'Entrar');
     codeButton.type = 'submit';
-    codeButton.textContent = 'Entrar com código';
-    codeRow.append(codeInput, codeButton);
+    const codeActions = el('div', 'botoes');
+    codeActions.append(codeButton);
+    codeRow.append(codeInput, codeActions);
     codeRow.addEventListener('submit', (event) => {
       event.preventDefault();
       if (codeInput.value.trim()) join('private', codeInput.value);
+      else codeInput.focus();
     });
-    panel.append(codeRow);
+    const back = el('div', 'botoes');
+    back.append(
+      btn('', 'Voltar ao início', () => {
+        window.location.hash = 'menu';
+      }),
+    );
+    panel.append(block('Tenho um código', codeRow), back);
     context.setStatus('Corrida online · escolha um modo');
     // Veio do menu principal já com o modo escolhido: entra direto.
     const pending = intent;
     intent = null;
     if (pending === 'casual') join('casual');
     else if (pending === 'ranked') startQueue();
+    else casual.focus({ preventScroll: true });
   }
 
+  const LOBBY_TITLES = {
+    private: 'Sala privada',
+    casual: 'Sala Casual',
+    ranked: 'Partida ranqueada',
+  };
+
   function renderLobby(message: RoomMessage): void {
-    panel.hidden = false;
-    panel.replaceChildren();
-    const titles = {
-      private: 'Sala privada',
-      casual: 'Sala Casual',
-      ranked: 'Partida ranqueada',
-    };
-    heading(titles[message.mode]);
-    if (message.mode === 'private') paragraph(`Código de convite: ${message.code}`, 'codigo');
-    const list = document.createElement('ol');
+    const startText =
+      message.secondsLeft === null ? 'Esperando pilotos…' : `Larga em ${message.secondsLeft} s`;
+    const key =
+      `lobby|${message.mode}|${message.code}|${message.you}|` +
+      message.roster.map((entry) => `${entry.name}:${entry.ready}:${entry.connected}`).join(',');
+    if (key === renderedKey && countdown) {
+      countdown.textContent = startText;
+      return;
+    }
+    // Redesenhar não pode tirar o foco de quem está no teclado.
+    const focused = (document.activeElement as HTMLElement | null)?.dataset.acao ?? '';
+    clearPanel(key);
+    heading(
+      LOBBY_TITLES[message.mode],
+      'Lobby',
+      message.mode === 'casual'
+        ? 'Bots completam o grid até 9 karts.'
+        : 'A corrida larga quando todos estiverem prontos.',
+    );
+    if (message.mode === 'private') {
+      const box = el('div', 'codigo-caixa');
+      const text = el('div', '');
+      text.append(el('small', '', 'Código de convite'), el('strong', '', message.code));
+      const copy = btn('', 'Copiar', () => {
+        navigator.clipboard
+          ?.writeText(message.code)
+          .then(() => context.setStatus('Código copiado'))
+          .catch(() => context.setStatus('Não consegui copiar. Selecione o código.', true));
+      });
+      copy.dataset.acao = 'copiar';
+      const actions = el('div', 'botoes');
+      actions.append(copy);
+      box.append(text, actions);
+      panel.append(box);
+    }
+    const list = el('ol', 'pilotos');
     for (const entry of message.roster) {
-      const item = document.createElement('li');
-      const you = entry.slot === message.you ? ' (você)' : '';
-      item.textContent = `${entry.name}${you} — ${entry.ready ? 'pronto' : 'aguardando'}`;
+      const item = el('li', 'piloto-linha');
+      item.dataset.voce = String(entry.slot === message.you);
+      item.dataset.pronto = String(entry.ready);
+      const name = el('span', 'piloto-linha-nome', entry.name);
+      if (entry.slot === message.you) name.append(el('span', 'etiqueta', 'Você'));
+      item.append(
+        el('span', 'piloto-linha-vaga', String(entry.slot + 1).padStart(2, '0')),
+        name,
+        el(
+          'span',
+          'piloto-linha-estado',
+          !entry.connected ? 'Reconectando' : entry.ready ? 'Pronto' : 'Aguardando',
+        ),
+      );
       list.append(item);
     }
     panel.append(list);
-    paragraph(
-      message.mode === 'casual'
-        ? `Larga em ${message.secondsLeft ?? '–'} s. Bots completam o grid até 9.`
-        : `Larga em ${message.secondsLeft ?? '–'} s, ou quando todos estiverem prontos.`,
-    );
+    countdown = paragraph(startText, 'contagem');
+    countdown.setAttribute('role', 'timer');
     const me = message.roster[message.you];
-    const actions = document.createElement('div');
-    actions.className = 'botoes';
-    const ready = button(actions, me?.ready ? 'Cancelar pronto' : 'Estou pronto', () => {
+    const actions = el('div', 'botoes');
+    const ready = btn('primario', me?.ready ? 'Cancelar pronto' : 'Estou pronto', () => {
       audio.unlock();
       connection.sendReady(!me?.ready);
     });
-    ready.className = 'primario';
-    button(actions, 'Sair da sala', () => {
+    ready.dataset.acao = 'pronto';
+    const leave = btn('', 'Sair da sala', () => {
       connection.close();
       showMenu();
     });
+    leave.dataset.acao = 'sair';
+    actions.append(ready, leave);
     panel.append(actions);
+    (panel.querySelector<HTMLElement>(`[data-acao="${focused || 'pronto'}"]`) ?? ready).focus({
+      preventScroll: true,
+    });
   }
 
   function renderResults(message: RoomMessage, title: string): void {
-    panel.hidden = false;
-    panel.replaceChildren();
-    heading(title);
-    const table = document.createElement('table');
-    const head = table.createTHead().insertRow();
-    for (const label of ['Pos.', 'Piloto', 'Tempo', 'Melhor volta']) {
-      const cell = document.createElement('th');
-      cell.scope = 'col';
-      cell.textContent = label;
-      head.append(cell);
+    const nextText = `Próxima etapa em ${message.secondsLeft ?? '–'} s`;
+    const key = `${title}|${message.you}|${(message.results ?? []).map((r) => r.slot).join(',')}`;
+    if (key === renderedKey && countdown) {
+      countdown.textContent = nextText;
+      return;
     }
-    const body = table.createTBody();
-    for (const result of message.results ?? []) {
-      const row = body.insertRow();
-      if (result.slot === message.you) row.className = 'voce';
+    clearPanel(key);
+    const results = message.results ?? [];
+    const mine = results.find((result) => result.slot === message.you);
+    heading(
+      LOBBY_TITLES[message.mode],
+      title,
+      mine ? `Você terminou em ${ORDINALS[mine.position - 1] ?? `${mine.position}º`}.` : '',
+    );
+    const list = el('ol', 'resultado');
+    for (const result of results) {
+      const row = el('li', 'resultado-linha');
+      row.dataset.voce = String(result.slot === message.you);
+      row.dataset.podio = String(result.position <= 3);
       const penalty = result.penaltyTicks > 0 ? ` (+${result.penaltyTicks / SIM_HZ} s)` : '';
-      const cells = [
-        ORDINALS[result.position - 1] ?? String(result.position),
-        result.name + (result.bot ? ' (bot)' : ''),
-        result.finished ? formatTime(result.timeTicks) + penalty : 'Não terminou',
-        formatTime(result.bestLapTicks),
-      ];
-      for (const text of cells) row.insertCell().textContent = text;
+      const name = el('span', 'resultado-nome', result.name);
+      if (result.bot) name.append(el('span', 'etiqueta', 'Bot'));
+      const times = el('span', 'resultado-tempos');
+      times.append(
+        el('strong', '', result.finished ? formatTime(result.timeTicks) + penalty : 'Não terminou'),
+        el('small', '', `Melhor volta ${formatTime(result.bestLapTicks)}`),
+      );
+      row.append(el('span', 'resultado-posicao', String(result.position)), name, times);
+      list.append(row);
     }
-    panel.append(table);
+    panel.append(list);
     if (message.mode === 'ranked') {
       paragraph(ratingLine || 'Calculando seu rating…', 'rating');
       if (!ratingAsked) {
@@ -355,18 +445,29 @@ export function createOnlineScreen(context: AppContext): GameScreen {
                   : `posicionamento: faltam ${rating.placementLeft} partidas`);
               const line = panel.querySelector('.rating');
               if (line) line.textContent = ratingLine;
+              updatePilot();
             })
             .catch(() => {});
         }, 1500);
       }
     }
-    paragraph(`Próxima etapa em ${message.secondsLeft ?? '–'} s.`, 'nota');
+    countdown = paragraph(nextText, 'contagem');
+    countdown.setAttribute('role', 'timer');
+    const actions = el('div', 'botoes');
+    actions.append(
+      btn('', 'Sair da sala', () => {
+        connection.close();
+        showMenu();
+      }),
+    );
+    panel.append(actions);
   }
 
   function applyRoom(message: RoomMessage): void {
     if (disposed) return;
     const previous = phase;
     room = message;
+    hud.setVisible(message.phase === 'race');
     phase = message.phase;
 
     if (message.phase === 'lobby') {
@@ -382,6 +483,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       context.setStatus(`Lobby · ${message.roster.length}/9 pilotos`);
     } else if (message.phase === 'race') {
       panel.hidden = true;
+      renderedKey = '';
       const key = message.roster.map((entry) => `${entry.slot}:${entry.name}`).join('|');
       if (key !== rosterKey) {
         ratingLine = '';
@@ -394,6 +496,8 @@ export function createOnlineScreen(context: AppContext): GameScreen {
         void view.setRoster(
           message.roster.map((entry) => toLoadout(entry.cosmetics, entry.slot)),
           message.you,
+          // Cada cliente confere de novo a pintura dos outros antes de desenhar.
+          message.roster.map((entry) => sanitizePaint(paints[entry.slot] ?? null)),
         );
         hud.say('Espere as luzes apagarem', 4, clock);
       }

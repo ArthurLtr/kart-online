@@ -1,4 +1,5 @@
-import type { Cosmetics } from './protocol.js';
+import type { Cosmetics, CustomPaint } from './protocol.js';
+import { sanitizeCosmetics, sanitizeCustomPaint } from './protocol.js';
 
 /** Cosmético que precisa estar no inventário para ser usado. */
 export interface CosmeticItemDef {
@@ -49,6 +50,34 @@ export function filterOwnedCosmetics(cosmetics: Cosmetics, owned: ReadonlySet<st
     if (!ITEM_IDS.has(id) || owned.has(id)) result[slot] = key;
   }
   return result;
+}
+
+/** Visual completo guardado com um nome, para trocar com um clique. */
+export interface PresetData {
+  name: string;
+  loadout: Cosmetics;
+  paint: CustomPaint | null;
+}
+
+export const MAX_PRESETS = 6;
+
+export const sanitizePresetName = (value: unknown): string =>
+  (typeof value === 'string' ? value.replace(/[^\p{L}\p{N} _.-]/gu, '').trim() : '').slice(0, 20) ||
+  'Visual';
+
+export function sanitizePresets(value: unknown): PresetData[] {
+  if (!Array.isArray(value)) return [];
+  const presets: PresetData[] = [];
+  for (const raw of value.slice(0, MAX_PRESETS)) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const entry = raw as Record<string, unknown>;
+    presets.push({
+      name: sanitizePresetName(entry.name),
+      loadout: sanitizeCosmetics(entry.loadout),
+      paint: sanitizeCustomPaint(entry.paint),
+    });
+  }
+  return presets;
 }
 
 export const DIVISIONS = [
@@ -120,6 +149,9 @@ export interface MeResponse {
   /** Ids ("slot:chave") dos cosméticos possuídos. */
   inventory: string[];
   loadout: Cosmetics;
+  /** Pintura livre gravada na conta. Ausente = a conta nunca gravou uma. */
+  paint?: CustomPaint | null;
+  presets: PresetData[];
   history: HistoryEntry[];
 }
 

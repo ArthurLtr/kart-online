@@ -242,17 +242,24 @@ export function findDesign<K extends keyof Loadout>(
 
 const STORAGE_KEY = 'kart-online.loadout';
 
+/** Loadout completo a partir de dados de qualquer origem: id desconhecido vira o padrão. */
+export function normalizeLoadout(value: unknown): Loadout {
+  const saved = (typeof value === 'object' && value !== null ? value : {}) as Record<
+    string,
+    unknown
+  >;
+  const loadout = { ...DEFAULT_LOADOUT };
+  for (const slot of Object.keys(loadout) as (keyof Loadout)[]) {
+    const id = saved[slot];
+    if (typeof id === 'string' && CATALOG[slot].some((item) => item.id === id)) loadout[slot] = id;
+  }
+  return loadout;
+}
+
 /** Loadout aplicado neste navegador; com conta, o do servidor é copiado para cá. */
 export function loadLoadout(): Loadout {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Loadout>;
-    const loadout = { ...DEFAULT_LOADOUT };
-    for (const slot of Object.keys(loadout) as (keyof Loadout)[]) {
-      const id = saved[slot];
-      if (typeof id === 'string' && CATALOG[slot].some((item) => item.id === id))
-        loadout[slot] = id;
-    }
-    return loadout;
+    return normalizeLoadout(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'));
   } catch {
     return { ...DEFAULT_LOADOUT };
   }

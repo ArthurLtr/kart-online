@@ -4,7 +4,7 @@ import { HttpError } from '../accounts/auth.js';
 import { config } from '../config.js';
 import type { Services } from '../services.js';
 
-const MAX_BODY_BYTES = 10_000;
+const MAX_BODY_BYTES = 40_000;
 
 async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
   let size = 0;
@@ -76,7 +76,7 @@ export function createApi(services: Services | null) {
       case 'GET /api/me':
         return accounts.me(user());
       case 'PUT /api/loadout':
-        return { loadout: await accounts.setLoadout(user(), (await readJson(request)).loadout) };
+        return { loadout: await accounts.setLoadout(user(), await readJson(request)) };
       case 'GET /api/ranking':
         return { ranking: await accounts.ranking() };
       case 'POST /api/queue/join': {

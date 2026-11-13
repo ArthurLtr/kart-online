@@ -14,10 +14,18 @@ export type RoomPhase = 'lobby' | 'race' | 'results' | 'podium';
  */
 export type Cosmetics = Record<string, string>;
 
+/**
+ * Pintura livre do kart (zonas, rodas, adesivos, número): JSON opaco para o
+ * servidor, que só limita o tamanho e o formato, guarda e repassa. Quem desenha
+ * é o cliente, que valida de novo cada campo; a simulação nunca a lê.
+ */
+export type CustomPaint = Record<string, unknown>;
+
 export interface JoinOptions {
   name: string;
   mode: RoomMode;
   cosmetics?: Cosmetics;
+  paint?: CustomPaint | null;
   /** Sessão da conta. Com ela, nome e cosméticos vêm do servidor. */
   token?: string;
 }
@@ -59,6 +67,15 @@ export interface RoomMessage {
   results: ResultEntry[] | null;
 }
 
+/**
+ * Servidor → cliente, só quando alguém entra ou sai: a pintura livre de cada
+ * vaga (`null` para quem usa a pintura do catálogo e para os bots). Vai à parte
+ * porque é grande demais para repetir a cada mensagem de sala.
+ */
+export interface PaintsMessage {
+  paints: (CustomPaint | null)[];
+}
+
 /** Cliente → servidor, um por tick de simulação. É a única coisa que o cliente manda da corrida. */
 export interface InputMessage extends KartInput {
   /** Número de sequência crescente. */
@@ -89,6 +106,7 @@ export const MESSAGES = {
   ping: 'ping',
   pong: 'pong',
   room: 'room',
+  paints: 'paints',
   snapshot: 'snapshot',
 } as const;
 
@@ -122,6 +140,40 @@ export function sanitizeCosmetics(value: unknown): Cosmetics {
     }
   }
   return result;
+}
+
+/** Tamanho máximo, em caracteres de JSON, de uma pintura livre. */
+export const MAX_PAINT_CHARS = 4096;
+
+function plainJson(value: unknown, depth: number): unknown {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string') return value.length <= 32 ? value : undefined;
+  if (typeof value !== 'object' || depth >= 4) return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 16)
+      .map((item) => plainJson(item, depth + 1))
+      .filter((item) => item !== undefined);
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value).slice(0, 16)) {
+    if (!/^[\w-]{1,24}$/.test(key)) continue;
+    const clean = plainJson(item, depth + 1);
+    if (clean !== undefined) result[key] = clean;
+  }
+  return result;
+}
+
+/**
+ * Reduz uma pintura vinda da rede a JSON simples e pequeno: só objetos, listas
+ * curtas, números finitos e textos curtos. O significado de cada campo é
+ * conferido pelo cliente que for desenhar.
+ */
+export function sanitizeCustomPaint(value: unknown): CustomPaint | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const clean = plainJson(value, 0) as CustomPaint;
+  return JSON.stringify(clean).length <= MAX_PAINT_CHARS ? clean : null;
 }
 
 export function sanitizeName(value: unknown): string {

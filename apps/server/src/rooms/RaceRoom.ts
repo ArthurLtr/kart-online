@@ -1,12 +1,13 @@
 import colyseus from 'colyseus';
 import type { Client } from 'colyseus';
-import type { JoinOptions, PingMessage, RoomMode, RoomPhase } from '@kart/shared';
+import type { JoinOptions, PaintsMessage, PingMessage, RoomMode, RoomPhase } from '@kart/shared';
 import {
   getCircuitoDaOrla,
   MAX_KARTS,
   MESSAGES,
   NET_TICK_HZ,
   sanitizeCosmetics,
+  sanitizeCustomPaint,
   sanitizeName,
   SIM_HZ,
 } from '@kart/shared';
@@ -40,6 +41,8 @@ export class RaceRoom extends Room {
   private session!: RaceSession;
   private lastPhase: RoomPhase = 'lobby';
   private lastSecondsLeft: number | null = null;
+  /** Pinturas já enviadas à sala (JSON), para só reenviar quando mudam. */
+  private sentPaints = '';
   private mode: RoomMode = 'casual';
   private tickets = new Map<string, string>();
 
@@ -115,11 +118,13 @@ export class RaceRoom extends Room {
       account?.name ?? sanitizeName(options.name),
       account?.cosmetics ?? sanitizeCosmetics(options.cosmetics),
       account?.userId ?? null,
+      account ? account.paint : sanitizeCustomPaint(options.paint),
     );
     if (slot < 0) {
       client.leave(4000, 'Sala cheia ou corrida em andamento');
       return;
     }
+    this.sentPaints = '';
     this.broadcastRoom();
   }
 
@@ -132,6 +137,7 @@ export class RaceRoom extends Room {
       try {
         await this.allowReconnection(client, RECONNECT_SECONDS);
         this.session.setConnected(client.sessionId, true);
+        this.sentPaints = '';
         this.broadcastRoom();
         return;
       } catch {
@@ -185,6 +191,13 @@ export class RaceRoom extends Room {
   }
 
   private broadcastRoom(): void {
+    // As pinturas vão antes da sala, e só quando mudam (ou alguém acabou de entrar).
+    const paints = this.session.paints();
+    const key = JSON.stringify(paints);
+    if (key !== this.sentPaints) {
+      this.sentPaints = key;
+      this.broadcast(MESSAGES.paints, { paints } satisfies PaintsMessage);
+    }
     for (const client of this.clients) {
       client.send(MESSAGES.room, this.session.roomMessage(client.sessionId));
     }

@@ -9,7 +9,7 @@ import { loadPaint, ORIGINAL_BLUE, samePaint, savePaint, solidPaint } from '../c
 import type { Driver } from '../models/driver';
 import { createDriver } from '../models/driver';
 import type { PilotPose } from '../models/pilot/PilotRig';
-import { isUnlocked, refreshAccount, saveAccountLoadout, sessionToken } from '../net/account';
+import { isUnlocked, refreshAccount, saveAccountLook, sessionToken } from '../net/account';
 import { disposeTree } from '../render/dispose';
 import {
   createRoom,
@@ -21,6 +21,10 @@ import { quality } from '../settings';
 import { arrowNavigation } from '../ui/arrows';
 import { setHints } from '../ui/shell';
 import { createPaintEditor } from './paintEditor';
+import { createHistory } from '../cosmetics/history';
+import type { Preset } from '../cosmetics/presets';
+import { loadPresets, savePresets } from '../cosmetics/presets';
+import { createPresetEditor } from './presetEditor';
 import { createStickerEditor } from './stickerEditor';
 import { createWheelEditor } from './wheelEditor';
 import type { AppContext, GameScreen } from './types';
@@ -43,7 +47,13 @@ interface Category {
   group: string;
   focus: Focus;
   /** Categoria sem itens de catálogo, só com editor. */
-  panel?: 'stickers';
+  panel?: 'stickers' | 'presets';
+}
+
+/** O que o desfazer/refazer guarda: itens do catálogo e pintura livre. */
+interface Look {
+  loadout: Loadout;
+  paint: KartPaint | null;
 }
 
 const STICKERS_LABEL = 'Adesivos e número';
@@ -100,6 +110,7 @@ export const CATEGORIES: readonly Category[] = [
     group: 'Efeitos',
     focus: { target: [0, 0.6, -0.4], offset: [-2.6, 1.0, -3.6], spin: false },
   },
+  { slot: 'livery', group: 'Visuais', panel: 'presets', focus: OVERVIEW },
 ];
 
 /** Vistas das zonas de pintura (plataforma de frente). */
@@ -119,7 +130,11 @@ const SURFACE_FOCUS: Record<StickerSurface, Focus> = {
 };
 
 const categoryLabel = (category: Category): string =>
-  category.panel === 'stickers' ? STICKERS_LABEL : SLOT_LABELS[category.slot];
+  category.panel === 'stickers'
+    ? STICKERS_LABEL
+    : category.panel === 'presets'
+      ? 'Visuais salvos'
+      : SLOT_LABELS[category.slot];
 
 const POSES: { id: PilotPose; label: string }[] = [
   { id: 'seated', label: 'No kart' },
@@ -245,9 +260,23 @@ export function createGarageScreen(context: AppContext): GameScreen {
   let appliedPaint = loadPaint();
   let previewPaint: KartPaint | null = appliedPaint;
   let paintQueued = false;
+  let presets = loadPresets();
+  const sameLook = (a: Look, b: Look): boolean =>
+    samePaint(a.paint, b.paint) &&
+    (Object.keys(a.loadout) as Slot[]).every((slot) => a.loadout[slot] === b.loadout[slot]);
+  const look = (): Look => ({ loadout: { ...preview }, paint: previewPaint });
+  const history = createHistory<Look>(look(), sameLook);
+  const restore = (state: Look | null): void => {
+    if (!state) return;
+    preview = { ...state.loadout };
+    previewPaint = state.paint;
+    refreshEditors();
+    showPreview();
+  };
   let pose: PilotPose = 'seated';
   let category = CATEGORIES[0]!;
-  let spinning = true;
+  // Com movimento reduzido no sistema, a plataforma começa parada (o botão Girar liga).
+  let spinning = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let flying = true;
   let requestId = 0;
   const wantedTarget = new Vector3(...OVERVIEW.target);
@@ -279,8 +308,10 @@ export function createGarageScreen(context: AppContext): GameScreen {
   const heading = element('header', 'gar-itens-topo');
   const grid = element('div', 'gar-grade');
   const note = element('p', 'nota gar-aviso');
-  const setPaint = (paint: KartPaint): void => {
+  const setPaint = (paint: KartPaint, final = true): void => {
     previewPaint = paint;
+    // Arrastar um controle é um passo só: entra no histórico quando solta.
+    if (final) history.push(look());
     refreshState();
     // Arrastando um controle chegam muitas mudanças por quadro: pinta uma vez por quadro.
     if (paintQueued || !driver) return;
@@ -300,6 +331,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
     setLivery(id) {
       previewPaint = null;
       preview = { ...preview, livery: id };
+      history.push(look());
       showPreview();
     },
     focusZone: (zone) => flyTo(ZONE_FOCUS[zone]),
@@ -310,21 +342,80 @@ export function createGarageScreen(context: AppContext): GameScreen {
     setPaint,
     focusSurface: (surface) => flyTo(SURFACE_FOCUS[surface]),
   });
+  /** Presets ficam guardados na hora, sem depender do Aplicar. */
+  const storePresets = (next: Preset[], status: string): void => {
+    presets = next;
+    savePresets(presets);
+    refreshEditors();
+    refreshState();
+    context.setStatus(status);
+    if (!sessionToken()) return;
+    saveAccountLook(applied, appliedPaint, presets).catch((erro: unknown) => {
+      context.setStatus(erro instanceof Error ? erro.message : 'Não consegui salvar.', true);
+    });
+  };
+  const presetEditor = createPresetEditor({
+    presets: () => presets,
+    colors: (preset) =>
+      [
+        preset.paint?.zones.fairing.color ?? swatchColors('livery', preset.loadout.livery)[0],
+        swatchColors('suit', preset.loadout.suit)[0],
+        swatchColors('helmetPaint', preset.loadout.helmetPaint)[0],
+        preset.paint?.wheels.color ?? swatchColors('rim', preset.loadout.rim)[0],
+      ].filter((color): color is string => typeof color === 'string'),
+    isCurrent: (preset) => sameLook(preset, look()),
+    save: (name) => storePresets([...presets, { name, ...look() }], `Visual "${name}" salvo`),
+    overwrite: (index) =>
+      storePresets(
+        presets.map((preset, i) => (i === index ? { name: preset.name, ...look() } : preset)),
+        `Visual "${presets[index]?.name ?? ''}" atualizado`,
+      ),
+    use(index) {
+      const preset = presets[index];
+      if (!preset) return;
+      preview = { ...preset.loadout };
+      previewPaint = preset.paint;
+      history.push(look());
+      refreshEditors();
+      showPreview();
+      context.setStatus(`Visual "${preset.name}" no kart. Aplique para usar nas corridas.`);
+    },
+    remove: (index) =>
+      storePresets(
+        presets.filter((_, i) => i !== index),
+        'Visual removido',
+      ),
+  });
   const refreshEditors = (): void => {
     editor.refresh();
     wheelEditor.refresh();
     stickerEditor.refresh();
+    presetEditor.refresh();
   };
-  editor.element.hidden = wheelEditor.element.hidden = stickerEditor.element.hidden = true;
-  panel.append(heading, grid, editor.element, wheelEditor.element, stickerEditor.element, note);
+  editor.element.hidden =
+    wheelEditor.element.hidden =
+    stickerEditor.element.hidden =
+    presetEditor.element.hidden =
+      true;
+  panel.append(
+    heading,
+    grid,
+    editor.element,
+    wheelEditor.element,
+    stickerEditor.element,
+    presetEditor.element,
+    note,
+  );
   let itemButtons = new Map<string, HTMLButtonElement>();
 
   function renderItems(): void {
     const stickers = category.panel === 'stickers';
+    const saved = category.panel === 'presets';
     const painting = category.slot === 'livery';
     const wheels = category.slot === 'rim';
     grid.hidden = painting;
-    editor.element.hidden = !painting || stickers;
+    editor.element.hidden = !painting || category.panel !== undefined;
+    presetEditor.element.hidden = !saved;
     wheelEditor.element.hidden = !wheels;
     // Nos aros, os itens prontos rolam junto com o editor de cor livre.
     if (wheels) wheelEditor.element.prepend(grid);
@@ -341,13 +432,15 @@ export function createGarageScreen(context: AppContext): GameScreen {
       element(
         'p',
         'nota',
-        stickers
-          ? 'Camadas com posição, tamanho, giro, cor e opacidade'
-          : painting
-            ? 'Cor livre, acabamento e padrão por zona'
-            : wheels
-              ? 'Aros prontos, ou cor livre e faixa no pneu'
-              : `${items.length} ${items.length === 1 ? 'opção' : 'opções'}`,
+        saved
+          ? 'Guarde combinações completas de kart e piloto'
+          : stickers
+            ? 'Camadas com posição, tamanho, giro, cor e opacidade'
+            : painting
+              ? 'Cor livre, acabamento e padrão por zona'
+              : wheels
+                ? 'Aros prontos, ou cor livre e faixa no pneu'
+                : `${items.length} ${items.length === 1 ? 'opção' : 'opções'}`,
       ),
     );
     itemButtons = new Map();
@@ -358,6 +451,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
           // Escolher um aro pronto larga a cor livre do aro.
           if (wheels && previewPaint?.wheels.color)
             previewPaint = { ...previewPaint, wheels: { ...previewPaint.wheels, color: null } };
+          history.push(look());
           refreshEditors();
           showPreview();
         });
@@ -396,9 +490,28 @@ export function createGarageScreen(context: AppContext): GameScreen {
   view.append(spinButton);
   const actions = element('div', 'botoes gar-acoes');
   const pending = element('span', 'gar-pendente');
+  const undoButton = actionButton('gar-historico', '↶', () => restore(history.undo()));
+  undoButton.setAttribute('aria-label', 'Desfazer');
+  undoButton.title = 'Desfazer (Ctrl+Z)';
+  const redoButton = actionButton('gar-historico', '↷', () => restore(history.redo()));
+  redoButton.setAttribute('aria-label', 'Refazer');
+  redoButton.title = 'Refazer (Ctrl+Y)';
+  const onHistoryKey = (event: KeyboardEvent): void => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'z' && key !== 'y') return;
+    // Num campo de texto, o Ctrl+Z é do próprio campo.
+    const target = event.target;
+    if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'search'))
+      return;
+    event.preventDefault();
+    restore(key === 'y' || event.shiftKey ? history.redo() : history.undo());
+  };
+  window.addEventListener('keydown', onHistoryKey);
   const discardButton = actionButton('', 'Descartar', () => {
     preview = { ...applied };
     previewPaint = appliedPaint;
+    history.push(look());
     refreshEditors();
     showPreview();
   });
@@ -410,14 +523,14 @@ export function createGarageScreen(context: AppContext): GameScreen {
     refreshState();
     context.setStatus('Visual aplicado');
     if (sessionToken()) {
-      saveAccountLoadout(applied)
+      saveAccountLook(applied, appliedPaint, presets)
         .then(() => context.setStatus('Visual salvo na sua conta'))
         .catch((erro: unknown) => {
           context.setStatus(erro instanceof Error ? erro.message : 'Não consegui salvar.', true);
         });
     }
   });
-  actions.append(pending, discardButton, applyButton);
+  actions.append(pending, undoButton, redoButton, discardButton, applyButton);
   bar.append(view, actions);
 
   function refreshState(): void {
@@ -427,15 +540,17 @@ export function createGarageScreen(context: AppContext): GameScreen {
       entry.button.setAttribute('aria-current', String(item === category));
       const count = previewPaint?.stickers.length ?? 0;
       entry.value.textContent =
-        item.panel === 'stickers'
-          ? `${count} ${count === 1 ? 'adesivo' : 'adesivos'}${previewPaint?.number ? ` · nº ${previewPaint.number}` : ''}`
-          : slot === 'livery' && previewPaint !== null
-            ? 'Personalizada'
-            : slot === 'rim' && previewPaint?.wheels.color
-              ? 'Cor livre'
-              : itemName(slot, preview[slot]);
+        item.panel === 'presets'
+          ? `${presets.length} ${presets.length === 1 ? 'salvo' : 'salvos'}`
+          : item.panel === 'stickers'
+            ? `${count} ${count === 1 ? 'adesivo' : 'adesivos'}${previewPaint?.number ? ` · nº ${previewPaint.number}` : ''}`
+            : slot === 'livery' && previewPaint !== null
+              ? 'Personalizada'
+              : slot === 'rim' && previewPaint?.wheels.color
+                ? 'Cor livre'
+                : itemName(slot, preview[slot]);
       entry.button.dataset.alterado = String(
-        item.panel !== 'stickers' &&
+        item.panel === undefined &&
           (preview[slot] !== applied[slot] ||
             (slot === 'livery' && !samePaint(previewPaint, appliedPaint))),
       );
@@ -451,6 +566,8 @@ export function createGarageScreen(context: AppContext): GameScreen {
     for (const [id, button] of poseButtons)
       button.setAttribute('aria-pressed', String(id === pose));
     spinButton.setAttribute('aria-pressed', String(spinning));
+    undoButton.disabled = !history.canUndo();
+    redoButton.disabled = !history.canRedo();
     const changed = slots.filter(
       (slot) =>
         preview[slot] !== applied[slot] ||
@@ -544,6 +661,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
   setHints([
     { keys: ['↑', '↓'], label: 'Navegar' },
     { keys: ['Enter'], label: 'Pré-visualizar' },
+    { keys: ['Ctrl', 'Z'], label: 'Desfazer' },
     { keys: ['Arrastar'], label: 'Girar a câmera' },
   ]);
 
@@ -553,6 +671,10 @@ export function createGarageScreen(context: AppContext): GameScreen {
       if (disposed || !me) return;
       applied = loadLoadout();
       preview = { ...applied };
+      appliedPaint = loadPaint();
+      previewPaint = appliedPaint;
+      presets = loadPresets();
+      history.reset(look());
       refreshEditors();
       showPreview();
     })
@@ -615,6 +737,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
     dispose() {
       disposed = true;
       for (const stop of stopArrows) stop();
+      window.removeEventListener('keydown', onHistoryKey);
       controls.removeEventListener('start', stopFlying);
       controls.dispose();
       camera.clearViewOffset();

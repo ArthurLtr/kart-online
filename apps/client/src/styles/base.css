@@ -30,6 +30,7 @@ body {
   position: fixed;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--e3);
   padding: var(--e4) var(--margem);

@@ -1,6 +1,7 @@
 import type {
   BotPlan,
   Cosmetics,
+  CustomPaint,
   InputMessage,
   KartInput,
   KartState,
@@ -65,6 +66,7 @@ interface Seat {
   connected: boolean;
   ready: boolean;
   cosmetics: Cosmetics | null;
+  paint: CustomPaint | null;
   queue: InputMessage[];
   lastInput: KartInput;
   /** Ticks seguidos sem entrada nova. */
@@ -158,7 +160,13 @@ export class RaceSession {
   }
 
   /** Entra no lobby. Devolve a vaga, ou -1 se a sala está cheia ou em corrida. */
-  addPlayer(id: string, name: string, cosmetics: Cosmetics, userId: string | null = null): number {
+  addPlayer(
+    id: string,
+    name: string,
+    cosmetics: Cosmetics,
+    userId: string | null = null,
+    paint: CustomPaint | null = null,
+  ): number {
     if (this.phase !== 'lobby' || this.seats.length >= MAX_KARTS) return -1;
     this.seats.push({
       id,
@@ -167,6 +175,7 @@ export class RaceSession {
       connected: true,
       ready: false,
       cosmetics,
+      paint,
       queue: [],
       lastInput: NO_INPUT,
       starved: 0,
@@ -272,6 +281,7 @@ export class RaceSession {
           connected: true,
           ready: true,
           cosmetics: null,
+          paint: null,
           queue: [],
           lastInput: NO_INPUT,
           starved: 0,
@@ -436,6 +446,11 @@ export class RaceSession {
       ready: seat.ready,
       cosmetics: seat.cosmetics,
     }));
+  }
+
+  /** Pintura livre de cada vaga (cosmético: a simulação nunca lê). */
+  paints(): (CustomPaint | null)[] {
+    return this.seats.map((seat) => seat.paint);
   }
 
   roomMessage(id: string): RoomMessage {

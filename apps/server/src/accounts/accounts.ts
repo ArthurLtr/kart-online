@@ -1,10 +1,20 @@
-import type { PrismaClient, Rating, Season, User } from '@prisma/client';
-import type { AccountView, AuthResponse, Cosmetics, MeResponse, RankingEntry } from '@kart/shared';
+import type { Prisma, PrismaClient, Rating, Season, User } from '@prisma/client';
+import type {
+  AccountView,
+  AuthResponse,
+  Cosmetics,
+  CustomPaint,
+  MeResponse,
+  PresetData,
+  RankingEntry,
+} from '@kart/shared';
 import {
   COSMETIC_ITEMS,
   filterOwnedCosmetics,
   ratingView,
   sanitizeCosmetics,
+  sanitizeCustomPaint,
+  sanitizePresets,
   sanitizeName,
 } from '@kart/shared';
 import { rating as newRating } from 'openskill';
@@ -27,6 +37,21 @@ export interface PlayerIdentity {
   name: string;
   guest: boolean;
   cosmetics: Cosmetics;
+  paint: CustomPaint | null;
+}
+
+/**
+ * Chaves do JSON do loadout que não são slots. O "$" não passa em
+ * sanitizeCosmetics, então nunca se confundem com um cosmético.
+ */
+const PAINT_KEY = '$paint';
+const PRESETS_KEY = '$presets';
+
+interface StoredLook {
+  loadout: Cosmetics;
+  /** `undefined` = a conta nunca gravou pintura. */
+  paint: CustomPaint | null | undefined;
+  presets: PresetData[];
 }
 
 /** Contas, perfil, inventário e loadout. */
@@ -153,9 +178,19 @@ export class Accounts {
     return new Set(rows.map((row) => row.itemId));
   }
 
-  private async loadout(userId: string, owned: ReadonlySet<string>): Promise<Cosmetics> {
+  private async look(userId: string, owned: ReadonlySet<string>): Promise<StoredLook> {
     const row = await this.prisma.equippedLoadout.findUnique({ where: { userId } });
-    return filterOwnedCosmetics(sanitizeCosmetics(row?.data), owned);
+    const data = (
+      typeof row?.data === 'object' && row.data !== null && !Array.isArray(row.data) ? row.data : {}
+    ) as Record<string, unknown>;
+    return {
+      loadout: filterOwnedCosmetics(sanitizeCosmetics(data), owned),
+      paint: PAINT_KEY in data ? sanitizeCustomPaint(data[PAINT_KEY]) : undefined,
+      presets: sanitizePresets(data[PRESETS_KEY]).map((preset) => ({
+        ...preset,
+        loadout: filterOwnedCosmetics(preset.loadout, owned),
+      })),
+    };
   }
 
   async me(userId: string): Promise<MeResponse> {
@@ -175,12 +210,15 @@ export class Accounts {
         include: { match: { include: { _count: { select: { results: true } } } } },
       }),
     ]);
+    const stored = await this.look(userId, owned);
     return {
       user: this.view(user),
       season: { name: season.name, endsAt: season.endsAt.toISOString() },
       rating: ratingView(rating.mu, rating.sigma, rating.matches),
       inventory: [...owned],
-      loadout: await this.loadout(userId, owned),
+      loadout: stored.loadout,
+      ...(stored.paint === undefined ? {} : { paint: stored.paint }),
+      presets: stored.presets,
       history: results.map((result) => ({
         mode: result.match.mode,
         position: result.position,
@@ -193,18 +231,39 @@ export class Accounts {
     };
   }
 
-  /** Salva o loadout equipado; item de catálogo que o jogador não possui é recusado. */
-  async setLoadout(userId: string, raw: unknown): Promise<Cosmetics> {
-    const wanted = sanitizeCosmetics(raw);
-    const allowed = filterOwnedCosmetics(wanted, await this.owned(userId));
+  /**
+   * Salva o visual equipado: loadout, pintura livre e presets. Item de catálogo
+   * que o jogador não possui é recusado. Pintura e presets que não vierem no
+   * corpo ficam como estavam.
+   */
+  async setLoadout(userId: string, body: Record<string, unknown>): Promise<Cosmetics> {
+    const owned = await this.owned(userId);
+    const wanted = sanitizeCosmetics(body.loadout);
+    const allowed = filterOwnedCosmetics(wanted, owned);
     const refused = Object.keys(wanted).filter((slot) => !(slot in allowed));
     if (refused.length > 0) {
       throw new HttpError(403, `Você não possui o item equipado em: ${refused.join(', ')}.`);
     }
+    const stored = await this.look(userId, owned);
+    const paint = 'paint' in body ? sanitizeCustomPaint(body.paint) : stored.paint;
+    const presets =
+      'presets' in body
+        ? sanitizePresets(body.presets).map((preset) => ({
+            ...preset,
+            loadout: filterOwnedCosmetics(preset.loadout, owned),
+          }))
+        : stored.presets;
+    const data = JSON.parse(
+      JSON.stringify({
+        ...allowed,
+        ...(paint === undefined ? {} : { [PAINT_KEY]: paint }),
+        [PRESETS_KEY]: presets,
+      }),
+    ) as Prisma.InputJsonObject;
     await this.prisma.equippedLoadout.upsert({
       where: { userId },
-      create: { userId, data: allowed },
-      update: { data: allowed },
+      create: { userId, data },
+      update: { data },
     });
     return allowed;
   }
@@ -216,11 +275,13 @@ export class Accounts {
       include: { profile: true },
     });
     if (!user) return null;
+    const { loadout, paint } = await this.look(userId, await this.owned(userId));
     return {
       userId,
       name: user.profile?.nickname ?? 'Piloto',
       guest: user.isGuest,
-      cosmetics: await this.loadout(userId, await this.owned(userId)),
+      cosmetics: loadout,
+      paint: paint ?? null,
     };
   }
 
