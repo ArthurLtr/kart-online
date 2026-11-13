@@ -115,10 +115,11 @@ export class RaceRoom extends Room {
       this.tickets.delete(String(options.ticket));
       return player;
     }
-    if (!options?.token) return true;
-    const userId = services?.accounts.userIdOf(options.token);
+    // Sem conta nÃ£o se joga online: nÃ£o existe mais jogador anÃ´nimo nem convidado.
+    const userId = options?.token ? services?.accounts.userIdOf(options.token) : null;
     const player = userId ? await services?.accounts.player(userId) : null;
-    if (!player) throw new Error('SessÃ£o invÃ¡lida. Entre de novo na sua conta.');
+    if (!player) throw new Error('Entre na sua conta para correr online.');
+    if (player.guest) throw new Error('Conclua o cadastro da sua conta para correr online.');
     return player;
   }
 

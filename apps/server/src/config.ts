@@ -23,6 +23,8 @@ export const config = {
   redisUrl: env.REDIS_URL,
   /** Assina as sessões. Em produção é obrigatório definir. */
   authSecret: env.AUTH_SECRET ?? 'kart-dev-nao-use-em-producao',
+  /** Client ID do "Entrar com Google" (Google Cloud Console). Sem ele, só e-mail e senha. */
+  googleClientId: env.GOOGLE_CLIENT_ID || undefined,
   /** Chave das rotas de administração; sem ela, as rotas ficam desligadas. */
   adminKey: env.ADMIN_KEY,
   seasonName: env.SEASON_NAME ?? 'Temporada 1',

@@ -77,6 +77,21 @@ export interface Registration {
   birthDate: Date;
 }
 
+/** Valida a data de nascimento e a idade mínima; lança HttpError com a mensagem para o jogador. */
+export function parseBirthDate(value: unknown, now = new Date()): Date {
+  const raw = typeof value === 'string' ? value : '';
+  const birthDate = new Date(`${raw}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(birthDate.getTime()) || birthDate > now) {
+    throw new HttpError(400, 'Data de nascimento inválida.');
+  }
+  const age = ageOn(birthDate, now);
+  if (age > 120) throw new HttpError(400, 'Data de nascimento inválida.');
+  if (age < MIN_ACCOUNT_AGE) {
+    throw new HttpError(403, `É preciso ter ${MIN_ACCOUNT_AGE} anos para criar conta.`);
+  }
+  return birthDate;
+}
+
 /** Valida o cadastro; lança HttpError com a mensagem para o jogador. */
 export function parseRegistration(body: Record<string, unknown>, now = new Date()): Registration {
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -87,18 +102,5 @@ export function parseRegistration(body: Record<string, unknown>, now = new Date(
   if (password.length < 8 || password.length > 128) {
     throw new HttpError(400, 'A senha precisa ter de 8 a 128 caracteres.');
   }
-  const raw = typeof body.birthDate === 'string' ? body.birthDate : '';
-  const birthDate = new Date(`${raw}T00:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(birthDate.getTime()) || birthDate > now) {
-    throw new HttpError(400, 'Data de nascimento inválida.');
-  }
-  const age = ageOn(birthDate, now);
-  if (age > 120) throw new HttpError(400, 'Data de nascimento inválida.');
-  if (age < MIN_ACCOUNT_AGE) {
-    throw new HttpError(
-      403,
-      `É preciso ter ${MIN_ACCOUNT_AGE} anos para criar conta. Você pode jogar como convidado.`,
-    );
-  }
-  return { email, password, birthDate };
+  return { email, password, birthDate: parseBirthDate(body.birthDate, now) };
 }

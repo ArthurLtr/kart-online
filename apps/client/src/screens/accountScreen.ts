@@ -1,20 +1,12 @@
 import type { HistoryEntry, MeResponse, RankingEntry } from '@kart/shared';
-import { COSMETIC_ITEMS, LEVEL_REWARDS, levelTitle, SIM_HZ, xpForLevel } from '@kart/shared';
+import { buyBlock, COSMETIC_ITEMS, levelTitle, SHOP, SIM_HZ } from '@kart/shared';
 import { SLOT_LABELS } from '../cosmetics/catalog';
 import type { Loadout } from '../cosmetics/catalog';
-import {
-  currentAccount,
-  fetchRanking,
-  login,
-  loginAsGuest,
-  logout,
-  refreshAccount,
-  register,
-} from '../net/account';
+import { currentAccount, fetchRanking, buyItem, logout, refreshAccount } from '../net/account';
 import { btn, el } from '../ui/dom';
 import type { SectionDef } from '../ui/sections';
-import { block, createSections, field, stat } from '../ui/sections';
-import { initials, setHints, updatePilot } from '../ui/shell';
+import { block, createSections, stat } from '../ui/sections';
+import { formatCoins, initials, reopenScreen, setHints, updatePilot } from '../ui/shell';
 import { swatchColors } from './garageScreen';
 import { createShowroom } from './showroom';
 import type { AppContext, GameScreen } from './types';
@@ -43,41 +35,6 @@ const formatTime = (ticks: number | null): string => {
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
-
-interface Field {
-  name: string;
-  label: string;
-  type: string;
-  autocomplete: string;
-  hint?: string;
-}
-
-const FIELDS = {
-  name: { name: 'name', label: 'Apelido', type: 'text', autocomplete: 'nickname' },
-  email: { name: 'email', label: 'E-mail', type: 'email', autocomplete: 'email' },
-  password: {
-    name: 'password',
-    label: 'Senha',
-    type: 'password',
-    autocomplete: 'current-password',
-  },
-  newPassword: {
-    name: 'password',
-    label: 'Senha',
-    type: 'password',
-    autocomplete: 'new-password',
-    hint: 'Pelo menos 8 caracteres',
-  },
-  birthDate: {
-    name: 'birthDate',
-    label: 'Nascimento',
-    type: 'date',
-    autocomplete: 'bday',
-    hint: 'Menores de 18 ficam fora de qualquer compra futura',
-  },
-} satisfies Record<string, Field>;
-
-const REGISTER_FIELDS = [FIELDS.name, FIELDS.email, FIELDS.newPassword, FIELDS.birthDate];
 
 function table(
   headers: readonly string[],
@@ -110,103 +67,18 @@ const historyRows = (history: readonly HistoryEntry[]) =>
         formatTime(row.bestLapTicks),
         delta === null ? '—' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)}`,
         `+${row.xp}`,
+        `+${row.coins}`,
       ],
     };
   });
 
-/** Perfil: entrar (convidado ou e-mail), resumo, histórico, ranking e coleção. */
+/** Perfil: resumo, histórico, carreira, progressão e loja, ranking e coleção. */
 export function createAccountScreen(context: AppContext): GameScreen {
   const showroom = createShowroom(context);
   const sections = createSections('Seções do perfil');
   let disposed = false;
   let ranking: readonly RankingEntry[] | null = null;
   let rankingError = false;
-
-  function form(
-    fields: readonly Field[],
-    submitLabel: string,
-    submit: (values: Record<string, string>) => Promise<unknown>,
-  ): HTMLFormElement {
-    const node = el('form', 'formulario');
-    for (const item of fields) {
-      const input = el('input');
-      input.name = item.name;
-      input.type = item.type;
-      input.required = true;
-      input.setAttribute('autocomplete', item.autocomplete);
-      if (item.name === 'name') input.maxLength = 16;
-      if (item.autocomplete === 'new-password') input.minLength = 8;
-      node.append(field(item.label, input, 'hint' in item ? item.hint : ''));
-    }
-    const error = el('p', 'erro');
-    error.setAttribute('role', 'alert');
-    error.hidden = true;
-    const actions = el('div', 'botoes');
-    const send = el('button', 'primario', submitLabel);
-    send.type = 'submit';
-    actions.append(send);
-    node.append(error, actions);
-    node.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const values: Record<string, string> = {};
-      for (const [key, value] of new FormData(node)) values[key] = String(value);
-      send.disabled = true;
-      send.textContent = 'Enviando…';
-      error.hidden = true;
-      submit(values)
-        .then(() => {
-          if (!disposed) render();
-        })
-        .catch((reason: unknown) => {
-          if (disposed) return;
-          send.disabled = false;
-          send.textContent = submitLabel;
-          error.hidden = false;
-          error.textContent = reason instanceof Error ? reason.message : 'Algo deu errado.';
-        });
-    });
-    return node;
-  }
-
-  const signedOut = (): SectionDef[] => [
-    {
-      id: 'convidado',
-      group: 'Entrar',
-      label: 'Convidado',
-      note: 'Só um apelido: corre no Casual e guarda o visual',
-      value: () => 'Sem e-mail',
-      render(body) {
-        body.append(
-          form([FIELDS.name], 'Entrar como convidado', (values) => loginAsGuest(values.name ?? '')),
-          el(
-            'p',
-            'nota',
-            'Dá para virar conta completa depois, sem perder nada. O Ranqueado exige conta com e-mail.',
-          ),
-        );
-      },
-    },
-    {
-      id: 'entrar',
-      group: 'Entrar',
-      label: 'Já tenho conta',
-      note: 'Entre com e-mail e senha',
-      value: () => 'E-mail e senha',
-      render(body) {
-        body.append(form([FIELDS.email, FIELDS.password], 'Entrar', login));
-      },
-    },
-    {
-      id: 'criar',
-      group: 'Entrar',
-      label: 'Criar conta',
-      note: 'Libera o Ranqueado e guarda tudo no servidor',
-      value: () => 'Ranqueado liberado',
-      render(body) {
-        body.append(form(REGISTER_FIELDS, 'Criar conta', register));
-      },
-    },
-  ];
 
   const signedIn = (me: MeResponse): SectionDef[] => {
     const { user, rating, season } = me;
@@ -232,7 +104,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
           const text = el('div', 'perfil-texto');
           text.append(
             el('strong', 'perfil-nome', user.name),
-            el('span', 'perfil-conta', user.guest ? 'Convidado' : (user.email ?? '')),
+            el('span', 'perfil-conta', user.email ?? ''),
           );
           card.append(
             el('span', 'perfil-sigla', initials(user.name)),
@@ -260,6 +132,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
           const stats = el('div', 'dados');
           stats.append(
             stat(String(rating.points), 'Pontos', true),
+            stat(me.coins.toLocaleString('pt-BR'), 'Moedas'),
             stat(String(rating.matches), 'Ranqueadas'),
             stat(String(wins), 'Vitórias recentes'),
             stat(formatTime(best), 'Melhor volta'),
@@ -279,7 +152,10 @@ export function createAccountScreen(context: AppContext): GameScreen {
             block(
               'Últimas corridas',
               recent.length > 0
-                ? table(['Modo', 'Posição', 'Tempo', 'Volta', 'Pts', 'XP'], historyRows(recent))
+                ? table(
+                    ['Modo', 'Posição', 'Tempo', 'Volta', 'Pts', 'XP', 'Moedas'],
+                    historyRows(recent),
+                  )
                 : el('p', 'nota', 'Nenhuma corrida ainda. Escolha um modo na tela Início.'),
             ),
           );
@@ -305,7 +181,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
           body.append(
             me.history.length > 0
               ? table(
-                  ['Modo', 'Posição', 'Tempo', 'Melhor volta', 'Pontos', 'XP'],
+                  ['Modo', 'Posição', 'Tempo', 'Melhor volta', 'Pontos', 'XP', 'Moedas'],
                   historyRows(me.history),
                 )
               : el('p', 'nota', 'Nenhuma corrida ainda. Escolha um modo na tela Início.'),
@@ -363,18 +239,29 @@ export function createAccountScreen(context: AppContext): GameScreen {
       {
         id: 'niveis',
         group: 'Piloto',
-        label: 'Níveis',
-        note: 'Cada corrida online rende experiência; níveis liberam itens',
-        value: () => `Nível ${me.level.level} · ${me.level.title}`,
+        label: 'Progressão e loja',
+        note: 'Corridas rendem experiência e moedas; níveis liberam itens para comprar',
+        value: () => `Nível ${me.level.level} · ${formatCoins(me.coins)}`,
         render(body) {
+          const wallet = el('div', 'dados');
+          wallet.append(
+            stat(me.coins.toLocaleString('pt-BR'), 'Moedas', true),
+            stat(String(me.level.level), 'Nível'),
+            stat(
+              me.level.needed ? String(me.level.needed - me.level.into) : '—',
+              'XP para o próximo',
+            ),
+          );
           const list = el('ul', 'colecao');
-          const rewards = Object.entries(LEVEL_REWARDS).sort((a, b) => a[1] - b[1]);
-          for (const [id, level] of rewards) {
-            const item = COSMETIC_ITEMS.find((entry) => entry.id === id);
+          const error = el('p', 'erro');
+          error.setAttribute('role', 'alert');
+          error.hidden = true;
+          for (const offer of SHOP) {
+            const item = COSMETIC_ITEMS.find((entry) => entry.id === offer.id);
             if (!item) continue;
-            const reached = me.level.level >= level;
+            const block = buyBlock(offer.id, me.level.level, me.coins, me.inventory);
             const row = el('li', 'colecao-item');
-            row.dataset.bloqueado = String(!reached);
+            row.dataset.bloqueado = String(block === 'level');
             const swatch = el('span', 'colecao-cor');
             const colors = swatchColors(item.slot as keyof Loadout, item.key);
             swatch.style.background =
@@ -387,20 +274,56 @@ export function createAccountScreen(context: AppContext): GameScreen {
               el(
                 'small',
                 '',
-                reached ? 'Liberado' : `Faltam ${Math.max(0, xpForLevel(level) - me.level.xp)} XP`,
+                block === 'owned'
+                  ? 'Na sua coleção'
+                  : block === 'level'
+                    ? `Libera no nível ${offer.level} · ${formatCoins(offer.price)}`
+                    : block === 'coins'
+                      ? `${formatCoins(offer.price)} · faltam ${(offer.price - me.coins).toLocaleString('pt-BR')}`
+                      : formatCoins(offer.price),
               ),
             );
-            row.append(swatch, text, el('span', 'etiqueta', `Nível ${level}`));
+            row.append(swatch, text);
+            if (block === 'owned') {
+              row.append(el('span', 'etiqueta', 'Seu'));
+            } else {
+              const buy = btn('primario', 'Comprar', () => {
+                buy.disabled = true;
+                error.hidden = true;
+                buyItem(offer.id)
+                  .then(() => {
+                    if (disposed) return;
+                    context.setStatus(`${item.name} comprado. Equipe na Garagem.`);
+                    render();
+                  })
+                  .catch((reason: unknown) => {
+                    if (disposed) return;
+                    buy.disabled = false;
+                    error.hidden = false;
+                    error.textContent =
+                      reason instanceof Error ? reason.message : 'Não consegui comprar.';
+                  });
+              });
+              buy.disabled = block !== null;
+              buy.setAttribute(
+                'aria-label',
+                `Comprar ${item.name} por ${formatCoins(offer.price)}`,
+              );
+              const cell = el('span', 'botoes');
+              cell.append(buy);
+              row.append(cell);
+            }
             list.append(row);
           }
           body.append(
-            block('Recompensas', list),
+            wallet,
+            block('Loja', list, error),
             block(
-              'Como ganhar experiência',
+              'Como ganhar',
               el(
                 'p',
                 'nota',
-                'Participar, completar a corrida, chegar na frente, correr limpo e bater a sua melhor volta rendem XP. O Ranqueado dá 25% a mais; sala privada rende metade e só com outro piloto.',
+                'Cada corrida online rende experiência (participar, completar, chegar na frente, correr limpo, bater a sua melhor volta) e moedas na mesma proporção. Subir de nível dá um bônus em moedas. O Ranqueado rende 25% a mais; sala privada rende metade e só com outro piloto.',
               ),
             ),
             block('Próximo título', el('p', 'nota', nextTitle(me.level.level))),
@@ -449,7 +372,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
         id: 'colecao',
         group: 'Coleção',
         label: 'Inventário',
-        note: 'Itens especiais da conta, liberados por nível. O resto do catálogo é livre.',
+        note: 'Itens especiais da conta, comprados com moedas. O resto do catálogo é livre.',
         value: () => `${owned} de ${COSMETIC_ITEMS.length}`,
         render(body) {
           const list = el('ul', 'colecao');
@@ -479,7 +402,11 @@ export function createAccountScreen(context: AppContext): GameScreen {
           );
           body.append(
             list,
-            el('p', 'nota', 'Não há loja: itens bloqueados são liberados ao subir de nível.'),
+            el(
+              'p',
+              'nota',
+              'Não há loja: itens bloqueados são comprados com moedas em Progressão e loja.',
+            ),
             actions,
           );
         },
@@ -487,48 +414,30 @@ export function createAccountScreen(context: AppContext): GameScreen {
       {
         id: 'conta',
         group: 'Conta',
-        label: user.guest ? 'Criar conta' : 'Minha conta',
-        note: user.guest
-          ? 'Vire conta completa para correr no Ranqueado'
-          : 'Dados da conta e saída',
-        value: () => (user.guest ? 'Convidado' : (user.email ?? '')),
+        label: 'Minha conta',
+        note: 'Dados da conta e saída',
+        value: () => user.email ?? '',
         render(body) {
-          if (user.guest) {
-            body.append(
-              block(
-                'Conta com e-mail',
-                el('p', 'nota', 'Seu visual, presets e histórico continuam com você.'),
-                form(REGISTER_FIELDS, 'Criar conta', register),
-              ),
-            );
-          } else {
-            const data = el('dl', 'mapa');
-            data.append(
-              el('dt', '', 'Apelido'),
-              el('dd', '', user.name),
-              el('dt', '', 'E-mail'),
-              el('dd', '', user.email ?? '—'),
-            );
-            body.append(block('Dados', data));
-          }
+          const data = el('dl', 'mapa');
+          data.append(
+            el('dt', '', 'Apelido'),
+            el('dd', '', user.name),
+            el('dt', '', 'E-mail'),
+            el('dd', '', user.email ?? '—'),
+          );
           const actions = el('div', 'botoes');
           actions.append(
             btn('', 'Sair da conta', () => {
               logout();
-              render();
-              context.setStatus('Você saiu da conta');
+              // Sem conta, o jogo volta para a tela de entrada.
+              reopenScreen();
             }),
           );
           body.append(
+            block('Dados', data),
             block(
               'Sessão',
-              el(
-                'p',
-                'nota',
-                user.guest
-                  ? 'Sair de uma conta de convidado perde o acesso a ela neste navegador.'
-                  : 'Você pode entrar de novo com e-mail e senha.',
-              ),
+              el('p', 'nota', 'Para jogar de novo é só entrar com Google ou e-mail e senha.'),
               actions,
             ),
           );
@@ -540,11 +449,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
   function render(): void {
     const me = currentAccount();
     updatePilot();
-    if (!me) {
-      sections.set(signedOut(), sections.current());
-      context.setStatus('Perfil · você não entrou');
-      return;
-    }
+    if (!me) return; // sem conta, a tela de entrada toma o lugar desta
     sections.set(signedIn(me), sections.current());
     context.setStatus(`Perfil · ${me.user.name}`);
     if (ranking || rankingError) return;

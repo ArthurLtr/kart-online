@@ -23,19 +23,29 @@ function span(className: string, text: string): HTMLSpanElement {
   return element;
 }
 
+/** "1.250 moedas" (com o separador de milhar do português). */
+export const formatCoins = (coins: number): string =>
+  `${coins.toLocaleString('pt-BR')} ${coins === 1 ? 'moeda' : 'moedas'}`;
+
+/**
+ * Reabre a tela do endereço atual. Usado depois de entrar ou sair da conta: a
+ * mesma rota passa a mostrar outra coisa (o jogo ou a tela de entrada).
+ */
+export function reopenScreen(): void {
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+}
+
 /** Redesenha o cartão do piloto com o último perfil carregado. */
 export function updatePilot(): void {
   const card = document.querySelector<HTMLElement>('#piloto');
   if (!card) return;
   const me = currentAccount();
-  const name = me?.user.name ?? 'Visitante';
+  const name = me?.user.name ?? 'Piloto';
   let level = 'Entrar';
   if (me) {
     const { rating } = me;
-    const career = `Nv ${me.level.level}`;
-    if (me.user.guest) level = `${career} · Convidado`;
-    else if (rating.division) level = `${career} · ${rating.division} · ${rating.points} pts`;
-    else level = `${career} · Posicionamento`;
+    const career = `Nv ${me.level.level} · ${formatCoins(me.coins)}`;
+    level = rating.division ? `${career} · ${rating.division}` : career;
   }
   const text = span('piloto-texto', '');
   text.append(span('piloto-nome', name), span('piloto-nivel', level));

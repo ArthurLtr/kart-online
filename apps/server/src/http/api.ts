@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { QueueKind } from '@kart/shared';
+import type { PublicConfig, QueueKind } from '@kart/shared';
 import { skillNumber } from '@kart/shared';
 import { HttpError } from '../accounts/auth.js';
+import { createGoogleVerifier } from '../accounts/google.js';
 import { config } from '../config.js';
 import type { Services } from '../services.js';
 
@@ -48,9 +49,13 @@ class RateLimiter {
  * era dela (as demais ficam com o Colyseus).
  */
 export function createApi(services: Services | null) {
+  const verifyGoogle = createGoogleVerifier(config.googleClientId);
   const authLimiter = new RateLimiter(10, 60_000);
 
   async function route(request: IncomingMessage, path: string): Promise<unknown> {
+    if (`${request.method} ${path}` === 'GET /api/config') {
+      return { googleClientId: config.googleClientId ?? null } satisfies PublicConfig;
+    }
     if (!services) throw new HttpError(503, 'Contas indisponíveis: o servidor está sem banco.');
     const { accounts, matchmakers } = services;
     const method = request.method ?? 'GET';
@@ -66,8 +71,16 @@ export function createApi(services: Services | null) {
 
     switch (key) {
       case 'POST /api/auth/guest':
+        throw new HttpError(410, 'Não dá mais para jogar como convidado. Crie a sua conta.');
+      case 'POST /api/auth/google': {
         authLimiter.check(address);
-        return accounts.guest((await readJson(request)).name);
+        const body = await readJson(request);
+        return accounts.google(await verifyGoogle(body.credential), body, optionalUser());
+      }
+      case 'POST /api/shop/buy': {
+        const userId = user();
+        return accounts.buy(userId, (await readJson(request)).item);
+      }
       case 'POST /api/auth/register':
         authLimiter.check(address);
         return accounts.register(await readJson(request), optionalUser());
@@ -85,8 +98,8 @@ export function createApi(services: Services | null) {
         const queue: QueueKind = (await readJson(request)).queue === 'casual' ? 'casual' : 'ranked';
         const player = await accounts.player(userId);
         if (!player) throw new HttpError(401, 'Sessão inválida.');
-        if (queue === 'ranked' && player.guest) {
-          throw new HttpError(403, 'O Ranqueado exige conta com e-mail. Crie a sua no Perfil.');
+        if (player.guest) {
+          throw new HttpError(403, 'Conclua o cadastro da sua conta para correr online.');
         }
         // Um jogador fica numa fila só.
         await matchmakers[queue === 'casual' ? 'ranked' : 'casual'].leave(userId);

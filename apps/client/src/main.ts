@@ -5,11 +5,12 @@ import '@fontsource/barlow-condensed/latin-600.css';
 import '@fontsource/barlow-condensed/latin-700-italic.css';
 import { Clock } from 'three';
 import { createModelProvider } from './models';
-import { refreshAccount } from './net/account';
+import { currentAccount, hasAccount, refreshAccount } from './net/account';
 import type { PostFx } from './render/postfx';
 import { createPostFx } from './render/postfx';
 import { applyRendererQuality, createRenderer } from './render/renderer';
 import { createAccountScreen } from './screens/accountScreen';
+import { createLoginScreen } from './screens/loginScreen';
 import { createGarageScreen } from './screens/garageScreen';
 import { createMenuScreen } from './screens/menuScreen';
 import { createSettingsScreen } from './screens/settingsScreen';
@@ -36,6 +37,7 @@ const SCREENS = {
   pista: createTrackScreen,
   garagem: createGarageScreen,
   conta: createAccountScreen,
+  entrar: createLoginScreen,
 } satisfies Record<string, ScreenFactory>;
 type ScreenName = keyof typeof SCREENS;
 
@@ -77,7 +79,9 @@ function resize(): void {
   }
 }
 
-function show(name: ScreenName): void {
+function show(wanted: ScreenName): void {
+  // Sem conta não se joga: qualquer rota cai na tela de entrada.
+  const name: ScreenName = hasAccount() ? (wanted === 'entrar' ? 'menu' : wanted) : 'entrar';
   screen?.dispose();
   postfx?.dispose();
   setHints([]);
@@ -117,10 +121,19 @@ const stopSettings = onSettingsChange((settings) => {
 window.addEventListener('resize', resize);
 window.addEventListener('hashchange', showFromHash);
 // O Rapier (colisões) é WASM: a primeira tela só abre depois de ele carregar.
-void initPhysics().then(showFromHash);
-void refreshAccount()
-  .then(updatePilot)
-  .catch(() => undefined); // servidor fora do ar: segue como visitante
+// A sessão guardada é conferida antes: quem já tem conta cai direto no jogo.
+void Promise.all([
+  initPhysics(),
+  refreshAccount().catch(() => {
+    context.setStatus('Não consegui falar com o servidor. Ele está rodando (pnpm dev)?', true);
+  }),
+]).then(() => {
+  showFromHash();
+  if (!hasAccount() && !currentAccount()) {
+    // Mantém o aviso de servidor fora do ar, se houve.
+    if (status.dataset.erro !== 'true') context.setStatus('Entre ou crie a sua conta para jogar');
+  }
+});
 
 const clock = new Clock();
 renderer.setAnimationLoop(() => {

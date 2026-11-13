@@ -2,7 +2,9 @@ import type {
   AuthResponse,
   Cosmetics,
   CustomPaint,
+  GoogleProfileNeeded,
   MeResponse,
+  PublicConfig,
   QueueKind,
   QueueStatus,
   RankingEntry,
@@ -126,11 +128,46 @@ async function enter(path: string, body: unknown): Promise<MeResponse | null> {
   return refreshAccount();
 }
 
-export const loginAsGuest = (name: string): Promise<MeResponse | null> =>
-  enter('/api/auth/guest', { name });
+/** Verdadeiro com conta completa (e-mail ou Google). Sem isso não se passa da tela de entrada. */
+export const hasAccount = (): boolean => me !== null && !me.user.guest;
+
+let publicConfig: Promise<PublicConfig> | null = null;
+/** Configuração pública do servidor (Client ID do Google). */
+export function fetchPublicConfig(): Promise<PublicConfig> {
+  publicConfig ??= request<PublicConfig>('GET', '/api/config').catch((error: unknown) => {
+    publicConfig = null;
+    throw error;
+  });
+  return publicConfig;
+}
+
+/**
+ * Entrar com Google. `credential` é o token de identidade que o botão do Google
+ * devolve; o servidor confere a assinatura. Em conta nova o servidor pede
+ * apelido e nascimento (`needsProfile`) e a chamada é repetida com `profile`.
+ */
+export async function loginWithGoogle(
+  credential: string,
+  profile: Record<string, string> = {},
+): Promise<MeResponse | GoogleProfileNeeded | null> {
+  const result = await request<AuthResponse | GoogleProfileNeeded>('POST', '/api/auth/google', {
+    ...profile,
+    credential,
+  });
+  if ('needsProfile' in result) return result;
+  setToken(result.token);
+  return refreshAccount();
+}
+
+/** Compra um item da loja com moedas e recarrega o perfil. */
+export async function buyItem(itemId: string): Promise<MeResponse | null> {
+  await request('POST', '/api/shop/buy', { item: itemId });
+  return refreshAccount();
+}
+
 export const login = (form: Record<string, string>): Promise<MeResponse | null> =>
   enter('/api/auth/login', form);
-/** Cria conta com e-mail; se a sessão atual é de convidado, ela é promovida. */
+/** Cria conta com e-mail; conta antiga de convidado é promovida e mantém o progresso. */
 export const register = (form: Record<string, string>): Promise<MeResponse | null> =>
   enter('/api/auth/register', form);
 

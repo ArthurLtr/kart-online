@@ -7,7 +7,8 @@ import {
   PLACEMENT_MATCHES,
   raceXp,
   ratingPoints,
-  rewardsBetween,
+  raceCoins,
+  levelUpBonus,
   START_MU,
   START_SIGMA,
   totalXp,
@@ -205,7 +206,7 @@ export async function recordMatch(
           personalBest,
         }),
       );
-      await saveCareer(prisma, userId, mode, record.track, entry, previous, xp);
+      await saveCareer(prisma, userId, mode, record.track, entry, previous, xp, match.id);
     }
     await prisma.matchResult.create({
       data: {
@@ -228,6 +229,7 @@ export async function recordMatch(
         divisionBefore: change?.divisionBefore ?? null,
         divisionAfter: change?.divisionAfter ?? null,
         xpGained: xp,
+        coinsGained: raceCoins(xp),
         laps: { create: entry.laps.map((ticks, i) => ({ lap: i + 1, ticks })) },
       },
     });
@@ -255,6 +257,7 @@ async function saveCareer(
   entry: MatchReportEntry,
   previous: { bestLapTicks: number | null; bestRaceTicks: number | null } | null,
   xp: number,
+  matchId: string,
 ): Promise<void> {
   const raceTicks = entry.finished ? entry.timeTicks : null;
   const stats = await prisma.playerStats.findUnique({
@@ -299,15 +302,26 @@ async function saveCareer(
   const profile = await prisma.profile.findUnique({ where: { userId } });
   if (!profile) return;
   const next = levelView(profile.xp + xp);
-  await prisma.profile.update({
-    where: { userId },
-    data: { xp: next.xp, level: next.level },
-  });
-  const rewards = rewardsBetween(profile.level, next.level);
-  if (rewards.length > 0) {
-    await prisma.inventory.createMany({
-      data: rewards.map((itemId) => ({ userId, itemId, source: 'level' })),
-      skipDuplicates: true,
-    });
-  }
+  const earned = raceCoins(xp);
+  const bonus = levelUpBonus(profile.level, next.level);
+  await prisma.$transaction([
+    prisma.profile.update({
+      where: { userId },
+      data: { xp: next.xp, level: next.level, coins: { increment: earned + bonus } },
+    }),
+    ...(earned > 0
+      ? [
+          prisma.coinEntry.create({
+            data: { userId, amount: earned, reason: 'race', ref: matchId },
+          }),
+        ]
+      : []),
+    ...(bonus > 0
+      ? [
+          prisma.coinEntry.create({
+            data: { userId, amount: bonus, reason: 'level', ref: String(next.level) },
+          }),
+        ]
+      : []),
+  ]);
 }

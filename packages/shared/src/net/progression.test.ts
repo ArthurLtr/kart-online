@@ -3,11 +3,14 @@ import { COSMETIC_ITEMS } from './accounts.js';
 import {
   botMu,
   botSkillFor,
-  LEVEL_REWARDS,
+  buyBlock,
+  levelUpBonus,
+  levelUpCoins,
   levelView,
   MAX_LEVEL,
+  raceCoins,
   raceXp,
-  rewardsBetween,
+  SHOP,
   totalXp,
   xpForLevel,
   xpToNext,
@@ -76,23 +79,36 @@ describe('XP da corrida', () => {
   });
 });
 
-describe('recompensas e bots', () => {
-  it('toda recompensa é um item do catálogo que não vem com a conta', () => {
-    for (const id of Object.keys(LEVEL_REWARDS)) {
-      const item = COSMETIC_ITEMS.find((entry) => entry.id === id);
-      expect(item, id).toBeDefined();
+describe('moedas e loja', () => {
+  it('toda oferta é um item do catálogo que não vem com a conta, e todos estão na loja', () => {
+    for (const offer of SHOP) {
+      const item = COSMETIC_ITEMS.find((entry) => entry.id === offer.id);
+      expect(item, offer.id).toBeDefined();
       expect(item?.starter).toBe(false);
+      expect(offer.price).toBeGreaterThan(0);
     }
     const locked = COSMETIC_ITEMS.filter((item) => !item.starter).map((item) => item.id);
-    expect(Object.keys(LEVEL_REWARDS).sort()).toEqual(locked.sort());
+    expect(SHOP.map((offer) => offer.id).sort()).toEqual(locked.sort());
   });
 
-  it('entrega os itens dos níveis atravessados, em ordem', () => {
-    expect(rewardsBetween(1, 2)).toEqual([]);
-    expect(rewardsBetween(2, 5)).toEqual(['livery:amarelo', 'trail:azul']);
-    expect(rewardsBetween(5, 5)).toEqual([]);
+  it('correr melhor rende mais moedas, e subir de nível dá bônus', () => {
+    expect(raceCoins(200)).toBeGreaterThan(raceCoins(100));
+    expect(raceCoins(0)).toBe(0);
+    expect(levelUpBonus(1, 1)).toBe(0);
+    expect(levelUpBonus(1, 3)).toBe(levelUpCoins(2) + levelUpCoins(3));
   });
 
+  it('só compra quem tem o nível e as moedas, e uma vez só', () => {
+    const offer = SHOP[0]!;
+    expect(buyBlock(offer.id, offer.level, offer.price, [])).toBeNull();
+    expect(buyBlock(offer.id, offer.level - 1, 99_999, [])).toBe('level');
+    expect(buyBlock(offer.id, offer.level, offer.price - 1, [])).toBe('coins');
+    expect(buyBlock(offer.id, 99, 99_999, new Set([offer.id]))).toBe('owned');
+    expect(buyBlock('livery:nao-existe', 99, 99_999, [])).toBe('unknown');
+  });
+});
+
+describe('bots', () => {
   it('bots acompanham a habilidade do grupo, dentro dos limites', () => {
     expect(botSkillFor(5)).toBe(0.05);
     expect(botSkillFor(50)).toBe(1);

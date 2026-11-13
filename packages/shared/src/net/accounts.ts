@@ -140,8 +140,9 @@ export interface HistoryEntry {
   timeTicks: number | null;
   bestLapTicks: number | null;
   pointsDelta: number | null;
-  /** Experiência ganha na corrida. */
+  /** Experiência e moedas ganhas na corrida. */
   xp: number;
+  coins: number;
   endedAt: string;
 }
 
@@ -169,6 +170,8 @@ export interface MeResponse {
   rating: RatingView;
   /** Nível de carreira e experiência. */
   level: LevelView;
+  /** Moedas do jogo (ganhas correndo, gastas na loja). */
+  coins: number;
   stats: CareerStats[];
   records: TrackRecordView[];
   /** Ids ("slot:chave") dos cosméticos possuídos. */
@@ -183,6 +186,19 @@ export interface MeResponse {
 export interface AuthResponse {
   token: string;
   user: AccountView;
+}
+
+/** O que o cliente precisa saber do servidor antes de entrar. */
+export interface PublicConfig {
+  /** Client ID do Google para o botão "Entrar com Google"; `null` = login Google desligado. */
+  googleClientId: string | null;
+}
+
+/** Resposta do login Google quando a conta ainda não existe e faltam dados. */
+export interface GoogleProfileNeeded {
+  needsProfile: true;
+  /** Nome que veio do Google, como sugestão de apelido. */
+  suggestedName: string;
 }
 
 export interface RankingEntry {

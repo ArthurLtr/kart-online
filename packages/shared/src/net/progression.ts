@@ -135,23 +135,61 @@ export const totalXp = (lines: readonly XpLine[]): number =>
     lines.reduce((sum, line) => sum + line.xp, 0),
   );
 
-/**
- * Cosméticos entregues ao chegar a um nível (id "slot:chave" → nível).
- * São os itens do catálogo que não vêm com a conta.
- */
-export const LEVEL_REWARDS: Readonly<Record<string, number>> = {
-  'livery:amarelo': 3,
-  'trail:azul': 5,
-  'suit:largada': 8,
-  'livery:verde': 12,
-  'rim:dourado': 16,
-  'helmetPaint:bandeira': 20,
-};
+// --- moedas e loja --------------------------------------------------------------
 
-/** Itens liberados ao passar de `from` para `to` (níveis). */
-export function rewardsBetween(from: number, to: number): string[] {
-  return Object.entries(LEVEL_REWARDS)
-    .filter(([, level]) => level > from && level <= to)
-    .sort((a, b) => a[1] - b[1])
-    .map(([id]) => id);
+/**
+ * Moedas de uma corrida: proporcionais à experiência ganha (quem corre bem
+ * ganha mais das duas coisas). Só existem moedas ganhas jogando.
+ */
+export const raceCoins = (xp: number): number => Math.max(0, Math.round(xp * 0.6));
+
+/** Bônus em moedas ao chegar ao nível `level`. */
+export const levelUpCoins = (level: number): number => 100 + 20 * level;
+
+/** Soma dos bônus ao passar de `from` para `to`. */
+export function levelUpBonus(from: number, to: number): number {
+  let total = 0;
+  for (let level = from + 1; level <= to; level++) total += levelUpCoins(level);
+  return total;
+}
+
+/** Moedas que toda conta nova recebe. */
+export const WELCOME_COINS = 200;
+
+/** Item da loja: desbloqueia para compra num nível e custa moedas. */
+export interface ShopItem {
+  /** Id do cosmético ("slot:chave"). */
+  id: string;
+  level: number;
+  price: number;
+}
+
+/** A loja: os itens do catálogo que não vêm com a conta. */
+export const SHOP: readonly ShopItem[] = [
+  { id: 'livery:amarelo', level: 2, price: 300 },
+  { id: 'trail:azul', level: 3, price: 450 },
+  { id: 'suit:largada', level: 5, price: 700 },
+  { id: 'livery:verde', level: 8, price: 1000 },
+  { id: 'rim:dourado', level: 12, price: 1500 },
+  { id: 'helmetPaint:bandeira', level: 16, price: 2200 },
+];
+
+export const shopItem = (id: string): ShopItem | undefined => SHOP.find((item) => item.id === id);
+
+export type BuyBlock = 'owned' | 'level' | 'coins' | 'unknown';
+
+/** Por que uma compra não pode ser feita (`null` = pode). */
+export function buyBlock(
+  id: string,
+  level: number,
+  coins: number,
+  owned: ReadonlySet<string> | readonly string[],
+): BuyBlock | null {
+  const item = shopItem(id);
+  if (!item) return 'unknown';
+  const has = Array.isArray(owned) ? owned.includes(id) : (owned as ReadonlySet<string>).has(id);
+  if (has) return 'owned';
+  if (level < item.level) return 'level';
+  if (coins < item.price) return 'coins';
+  return null;
 }

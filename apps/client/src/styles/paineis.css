@@ -738,3 +738,100 @@
   background: var(--acento);
   transition: width var(--lento) var(--curva);
 }
+
+/* --- tela de entrada (login e cadastro) ------------------------------------------ */
+
+body[data-tela='entrar'] :is(.abas, .piloto) {
+  display: none;
+}
+
+.entrada {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  min-height: 0;
+  height: 100%;
+}
+
+.entrada-cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  width: min(100%, 420px);
+  max-height: 100%;
+  padding: var(--e5) var(--e5) var(--e4);
+  border: 1px solid var(--linha);
+  border-left: 3px solid var(--acento);
+  border-radius: var(--raio-g);
+  background: var(--superficie);
+  backdrop-filter: var(--desfoque);
+  box-shadow: var(--sombra);
+  pointer-events: auto;
+  animation: entrar-lado var(--lento) var(--curva) backwards;
+}
+
+.entrada-titulo {
+  margin: 0;
+  font: italic 700 var(--t-2xl) / 0.95 var(--fonte-titulo);
+  text-transform: uppercase;
+}
+
+.entrada-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  min-height: 0;
+  margin: 0 calc(var(--e2) * -1);
+  padding: var(--e1) var(--e2);
+  overflow-y: auto;
+}
+
+#tela-ui .entrada p {
+  margin: 0;
+}
+
+.entrada-google {
+  display: grid;
+  gap: var(--e2);
+}
+
+.entrada-google-botao {
+  min-height: 44px;
+}
+
+.entrada-google .nota:empty {
+  display: none;
+}
+
+.entrada-ou {
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  color: var(--texto-3);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.entrada-ou::before,
+.entrada-ou::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--linha);
+}
+
+.botoes.seg.entrada-abas {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* --- loja -------------------------------------------------------------------------- */
+
+.colecao-item .botoes button {
+  padding: var(--e2) var(--e3);
+  font-size: var(--t-s);
+}
+
+.gar-comprar[hidden] {
+  display: none;
+}

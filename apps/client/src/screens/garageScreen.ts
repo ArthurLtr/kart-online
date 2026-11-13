@@ -9,7 +9,14 @@ import { loadPaint, ORIGINAL_BLUE, samePaint, savePaint, solidPaint } from '../c
 import type { Driver } from '../models/driver';
 import { createDriver } from '../models/driver';
 import type { PilotPose } from '../models/pilot/PilotRig';
-import { isUnlocked, refreshAccount, saveAccountLook, sessionToken } from '../net/account';
+import {
+  buyItem,
+  currentAccount,
+  isUnlocked,
+  refreshAccount,
+  saveAccountLook,
+  sessionToken,
+} from '../net/account';
 import { disposeTree } from '../render/dispose';
 import {
   createRoom,
@@ -19,7 +26,8 @@ import {
 } from '../render/studio';
 import { quality } from '../settings';
 import { arrowNavigation } from '../ui/arrows';
-import { setHints } from '../ui/shell';
+import { buyBlock, shopItem } from '@kart/shared';
+import { formatCoins, setHints, updatePilot } from '../ui/shell';
 import { createPaintEditor } from './paintEditor';
 import { createHistory } from '../cosmetics/history';
 import type { Preset } from '../cosmetics/presets';
@@ -308,6 +316,27 @@ export function createGarageScreen(context: AppContext): GameScreen {
   const heading = element('header', 'gar-itens-topo');
   const grid = element('div', 'gar-grade');
   const note = element('p', 'nota gar-aviso');
+  // Item da loja em pré-visualização: dá para comprar sem sair da Garagem.
+  let offerId = '';
+  const buyRow = element('div', 'botoes gar-comprar');
+  const buyButton = actionButton('primario', 'Comprar', () => {
+    if (!offerId) return;
+    buyButton.disabled = true;
+    buyItem(offerId)
+      .then(() => {
+        if (disposed) return;
+        updatePilot();
+        context.setStatus('Item comprado. Aplique para usar nas corridas.');
+        refreshState();
+      })
+      .catch((erro: unknown) => {
+        if (disposed) return;
+        context.setStatus(erro instanceof Error ? erro.message : 'Não consegui comprar.', true);
+        refreshState();
+      });
+  });
+  buyRow.append(buyButton);
+  buyRow.hidden = true;
   const setPaint = (paint: KartPaint, final = true): void => {
     previewPaint = paint;
     // Arrastar um controle é um passo só: entra no histórico quando solta.
@@ -405,6 +434,7 @@ export function createGarageScreen(context: AppContext): GameScreen {
     stickerEditor.element,
     presetEditor.element,
     note,
+    buyRow,
   );
   let itemButtons = new Map<string, HTMLButtonElement>();
 
@@ -584,10 +614,28 @@ export function createGarageScreen(context: AppContext): GameScreen {
         ? ''
         : `${changed.length} ${changed.length === 1 ? 'alteração' : 'alterações'} sem aplicar`;
     // Item bloqueado pode ser visto no kart, mas não aplicado.
+    // Item bloqueado é da loja: mostra o que falta e, podendo, o botão de comprar.
+    const account = currentAccount();
+    const lockedSlot = locked[0];
+    const offer = lockedSlot ? shopItem(`${lockedSlot}:${preview[lockedSlot]}`) : undefined;
+    const block =
+      offer && account
+        ? buyBlock(offer.id, account.level.level, account.coins, account.inventory)
+        : 'unknown';
+    offerId = offer && block === null ? offer.id : '';
+    buyRow.hidden = !offer || block === 'owned';
+    buyButton.disabled = offerId === '';
+    buyButton.textContent = offer ? `Comprar · ${formatCoins(offer.price)}` : 'Comprar';
     note.textContent =
-      locked.length > 0
-        ? `Só pré-visualização: ${locked.map((slot) => itemName(slot, preview[slot])).join(', ')} ainda não está no seu inventário.`
-        : '';
+      locked.length === 0 || !lockedSlot
+        ? ''
+        : !offer
+          ? `Só pré-visualização: ${itemName(lockedSlot, preview[lockedSlot])} ainda não está no seu inventário.`
+          : block === 'level'
+            ? `${itemName(lockedSlot, preview[lockedSlot])} libera no nível ${offer.level} (${formatCoins(offer.price)}). Você está no nível ${account?.level.level ?? 1}.`
+            : block === 'coins'
+              ? `${itemName(lockedSlot, preview[lockedSlot])} custa ${formatCoins(offer.price)}: faltam ${(offer.price - (account?.coins ?? 0)).toLocaleString('pt-BR')}.`
+              : `${itemName(lockedSlot, preview[lockedSlot])} está na loja. Compre para poder aplicar.`;
   }
 
   function showPreview(): void {

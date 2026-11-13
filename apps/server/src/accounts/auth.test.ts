@@ -4,11 +4,13 @@ import {
   ageOn,
   hashPassword,
   HttpError,
+  parseBirthDate,
   parseRegistration,
   signToken,
   verifyPassword,
   verifyToken,
 } from './auth.js';
+import { createGoogleVerifier, identityFromClaims } from './google.js';
 
 const NOW = new Date('2026-11-12T12:00:00Z');
 const form = (extra: Record<string, unknown> = {}) => ({
@@ -87,5 +89,32 @@ describe('inventário', () => {
     const owned = new Set(['livery:vermelho']);
     const wanted = { livery: 'vermelho', suit: 'largada', trail: 'azul', gloves: 'pretas' };
     expect(filterOwnedCosmetics(wanted, owned)).toEqual({ livery: 'vermelho', gloves: 'pretas' });
+  });
+});
+
+describe('entrar com Google', () => {
+  const claims = { sub: '123', email: 'Ana@Gmail.com ', email_verified: true, name: 'Ana' };
+
+  it('aproveita só o identificador, o e-mail normalizado e o nome', () => {
+    expect(identityFromClaims(claims)).toEqual({ sub: '123', email: 'ana@gmail.com', name: 'Ana' });
+  });
+
+  it('recusa token sem identificador, sem e-mail ou com e-mail não confirmado', () => {
+    expect(() => identityFromClaims({ ...claims, sub: '' })).toThrow(HttpError);
+    expect(() => identityFromClaims({ ...claims, email: undefined })).toThrow(HttpError);
+    expect(() => identityFromClaims({ ...claims, email_verified: false })).toThrow(HttpError);
+  });
+
+  it('sem Client ID configurado, o login Google responde que está desligado', async () => {
+    await expect(createGoogleVerifier(undefined)('qualquer')).rejects.toMatchObject({
+      status: 503,
+    });
+  });
+
+  it('data de nascimento: recusa menor de 13 e data inválida', () => {
+    const now = new Date('2026-06-01T12:00:00Z');
+    expect(parseBirthDate('2000-01-01', now).getUTCFullYear()).toBe(2000);
+    expect(() => parseBirthDate('2020-01-01', now)).toThrow(HttpError);
+    expect(() => parseBirthDate('ontem', now)).toThrow(HttpError);
   });
 });

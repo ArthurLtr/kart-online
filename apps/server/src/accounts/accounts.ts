@@ -4,6 +4,7 @@ import type {
   AuthResponse,
   Cosmetics,
   CustomPaint,
+  GoogleProfileNeeded,
   MeResponse,
   PresetData,
   QueueKind,
@@ -11,12 +12,15 @@ import type {
 } from '@kart/shared';
 import {
   COSMETIC_ITEMS,
+  buyBlock,
   filterOwnedCosmetics,
   levelView,
   ratingView,
   sanitizeCosmetics,
   sanitizeCustomPaint,
   sanitizePresets,
+  shopItem,
+  WELCOME_COINS,
   sanitizeName,
 } from '@kart/shared';
 import { rating as newRating } from 'openskill';
@@ -25,13 +29,17 @@ import {
   ageOn,
   hashPassword,
   HttpError,
+  parseBirthDate,
   parseRegistration,
   signToken,
   verifyPassword,
   verifyToken,
 } from './auth.js';
+import type { GoogleIdentity } from './google.js';
 
-type UserWithProfile = User & { profile: { nickname: string; xp?: number } | null };
+type UserWithProfile = User & {
+  profile: { nickname: string; xp?: number; coins?: number } | null;
+};
 
 /** Quem está entrando numa sala: identidade e visual vindos do banco, não do cliente. */
 export interface PlayerIdentity {
@@ -128,19 +136,114 @@ export class Accounts {
     });
   }
 
-  /** Login como convidado: só um apelido. */
-  async guest(name: unknown): Promise<AuthResponse> {
-    const user = await this.prisma.user.create({
-      data: { isGuest: true, profile: { create: { nickname: sanitizeName(name) } } },
+  /** Itens iniciais e moedas de boas-vindas de uma conta recém-criada. */
+  private async welcome(userId: string): Promise<void> {
+    await this.grantStarters(userId);
+    const already = await this.prisma.coinEntry.findFirst({
+      where: { userId, reason: 'welcome' },
+    });
+    if (already) return;
+    await this.prisma.$transaction([
+      this.prisma.profile.update({
+        where: { userId },
+        data: { coins: { increment: WELCOME_COINS } },
+      }),
+      this.prisma.coinEntry.create({
+        data: { userId, amount: WELCOME_COINS, reason: 'welcome' },
+      }),
+    ]);
+  }
+
+  /**
+   * Entrar com Google. O token já chega verificado (`identity`). Conta que já
+   * existe com o mesmo e-mail é ligada ao Google; conta nova pede apelido e
+   * data de nascimento antes de ser criada.
+   */
+  async google(
+    identity: GoogleIdentity,
+    body: Record<string, unknown>,
+    currentUserId: string | null,
+  ): Promise<AuthResponse | GoogleProfileNeeded> {
+    const linked = await this.prisma.user.findUnique({
+      where: { googleId: identity.sub },
       include: { profile: true },
     });
-    await this.grantStarters(user.id);
+    if (linked) return this.session(linked);
+
+    const sameEmail = await this.prisma.user.findUnique({
+      where: { email: identity.email },
+      include: { profile: true },
+    });
+    if (sameEmail) {
+      // O Google confirmou que o e-mail é da pessoa: é a mesma conta.
+      const user = await this.prisma.user.update({
+        where: { id: sameEmail.id },
+        data: { googleId: identity.sub },
+        include: { profile: true },
+      });
+      return this.session(user);
+    }
+
+    if (typeof body.birthDate !== 'string' || typeof body.name !== 'string') {
+      return { needsProfile: true, suggestedName: sanitizeName(identity.name) };
+    }
+    const birthDate = parseBirthDate(body.birthDate);
+    const nickname = sanitizeName(body.name);
+    const account = { email: identity.email, googleId: identity.sub, birthDate, isGuest: false };
+    const current = currentUserId
+      ? await this.prisma.user.findUnique({ where: { id: currentUserId } })
+      : null;
+    // Conta antiga de convidado é promovida e mantém histórico e inventário.
+    const user = current?.isGuest
+      ? await this.prisma.user.update({
+          where: { id: current.id },
+          data: { ...account, profile: { update: { nickname } } },
+          include: { profile: true },
+        })
+      : await this.prisma.user.create({
+          data: { ...account, profile: { create: { nickname } } },
+          include: { profile: true },
+        });
+    await this.welcome(user.id);
     return this.session(user);
   }
 
   /**
-   * Cria conta com e-mail. Se quem pede já é convidado, a conta de convidado é
-   * promovida e mantém histórico e inventário.
+   * Compra um item da loja com moedas. O saldo só baixa se ainda cobrir o preço
+   * (duas compras ao mesmo tempo não deixam o saldo negativo).
+   */
+  async buy(userId: string, itemId: unknown): Promise<{ coins: number; inventory: string[] }> {
+    const offer = typeof itemId === 'string' ? shopItem(itemId) : undefined;
+    if (!offer) throw new HttpError(404, 'Este item não está na loja.');
+    const profile = await this.prisma.profile.findUnique({ where: { userId } });
+    if (!profile) throw new HttpError(401, 'Sessão inválida.');
+    const owned = await this.owned(userId);
+    const block = buyBlock(offer.id, profile.level, profile.coins, owned);
+    if (block === 'owned') throw new HttpError(409, 'Você já tem este item.');
+    if (block === 'level') {
+      throw new HttpError(403, `Este item libera no nível ${offer.level}.`);
+    }
+    if (block === 'coins') {
+      throw new HttpError(403, `Faltam ${offer.price - profile.coins} moedas.`);
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const paid = await tx.profile.updateMany({
+        where: { userId, coins: { gte: offer.price } },
+        data: { coins: { decrement: offer.price } },
+      });
+      if (paid.count !== 1) throw new HttpError(403, 'Moedas insuficientes.');
+      await tx.inventory.create({ data: { userId, itemId: offer.id, source: 'purchase' } });
+      await tx.coinEntry.create({
+        data: { userId, amount: -offer.price, reason: 'purchase', ref: offer.id },
+      });
+    });
+    const after = await this.prisma.profile.findUnique({ where: { userId } });
+    return { coins: after?.coins ?? 0, inventory: [...(await this.owned(userId))] };
+  }
+
+  /**
+   * Cria conta com e-mail. Conta antiga de convidado (de quando existia esse
+   * modo) é promovida e mantém histórico e inventário.
    */
   async register(
     body: Record<string, unknown>,
@@ -165,7 +268,7 @@ export class Accounts {
           data: { ...account, profile: { create: { nickname } } },
           include: { profile: true },
         });
-    await this.grantStarters(user.id);
+    await this.welcome(user.id);
     return this.session(user);
   }
 
@@ -236,6 +339,7 @@ export class Accounts {
       season: { name: season.name, endsAt: season.endsAt.toISOString() },
       rating: ratingView(rating.mu, rating.sigma, rating.matches),
       level: levelView(user.profile?.xp ?? 0),
+      coins: user.profile?.coins ?? 0,
       stats: stats.map((row) => ({
         mode: row.mode,
         matches: row.matches,
@@ -262,6 +366,7 @@ export class Accounts {
         bestLapTicks: result.bestLapTicks,
         pointsDelta: result.pointsDelta,
         xp: result.xpGained,
+        coins: result.coinsGained,
         endedAt: result.match.endedAt.toISOString(),
       })),
     };

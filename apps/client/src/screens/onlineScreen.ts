@@ -24,7 +24,7 @@ import type { QueueKind, QueueStatus } from '@kart/shared';
 import { currentAccount, queue, refreshAccount, sessionToken } from '../net/account';
 import { btn, el } from '../ui/dom';
 import { block, field } from '../ui/sections';
-import { updatePilot } from '../ui/shell';
+import { formatCoins, updatePilot } from '../ui/shell';
 import { getSettings } from '../settings';
 import { createNameTags } from '../ui/nameTags';
 import type { PlayIntent } from './menuScreen';
@@ -241,11 +241,9 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     nameInput.value = account?.user.name ?? storedName();
     nameInput.placeholder = 'Piloto';
     nameInput.setAttribute('autocomplete', 'nickname');
-    // Com conta, o servidor usa o apelido gravado nela.
-    nameInput.disabled = account !== null;
-    panel.append(
-      field('Apelido', nameInput, account ? 'O apelido vem do seu perfil.' : 'Até 16 caracteres.'),
-    );
+    // O servidor usa o apelido gravado na conta.
+    nameInput.disabled = true;
+    panel.append(field('Apelido', nameInput, 'O apelido vem da sua conta.'));
 
     const join = (mode: RoomMode, code?: string): void => {
       const name = nameInput.value.trim() || 'Piloto';
@@ -289,19 +287,10 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       modes.append(button);
       return button;
     };
-    // Com conta, o Casual também pareia por habilidade; sem conta, entra numa sala aberta.
-    const playCasual = (): void => {
-      if (sessionToken()) startQueue('casual', () => join('casual'));
-      else join('casual');
-    };
-    const casual = mode(
-      'Casual',
-      account
-        ? 'Pilotos e bots do seu nível. Não vale pontos.'
-        : 'Entra agora. Bots completam o grid até 9.',
-      playCasual,
-    );
-    mode('Ranqueado', 'Vale pontos na temporada. Exige conta com e-mail.', () =>
+    // O Casual pareia por habilidade; se a fila estiver fora do ar, entra numa sala aberta.
+    const playCasual = (): void => startQueue('casual', () => join('casual'));
+    const casual = mode('Casual', 'Pilotos e bots do seu nível. Não vale pontos.', playCasual);
+    mode('Ranqueado', 'Vale pontos na temporada e rende mais experiência.', () =>
       startQueue('ranked'),
     );
     mode('Sala privada', 'Cria uma sala e gera um código para chamar os amigos.', () =>
@@ -468,7 +457,9 @@ export function createOnlineScreen(context: AppContext): GameScreen {
               const { rating, level } = me;
               const progress =
                 level.needed > 0 ? ` (${level.into}/${level.needed} XP)` : ' (nível máximo)';
-              ratingLine = `+${last?.xp ?? 0} XP · Nível ${level.level}${progress}`;
+              ratingLine =
+                `+${last?.xp ?? 0} XP · +${formatCoins(last?.coins ?? 0)} · ` +
+                `Nível ${level.level}${progress}`;
               if (message.mode === 'ranked') {
                 const delta = last?.pointsDelta ?? null;
                 const change =
