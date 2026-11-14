@@ -1,5 +1,6 @@
 import { MenuMusic } from '../audio/menuMusic';
-import { refreshAccount } from '../net/account';
+import { currentAccount, refreshAccount } from '../net/account';
+import { createRankHighlight } from '../ui/RankBadge';
 import { setHints, updatePilot } from '../ui/shell';
 import { createShowroom } from './showroom';
 import type { AppContext, GameScreen } from './types';
@@ -131,6 +132,9 @@ export function createMenuScreen(context: AppContext): GameScreen {
       element('p', 'sobretitulo', number),
       element('h2', 'titulo-xl', mode.name),
       element('p', 'inicio-desc', mode.description),
+      ...(mode.intent === 'ranked' && currentAccount()
+        ? [createRankHighlight(currentAccount()!.rating, true)]
+        : []),
       facts,
       go,
     );
@@ -160,7 +164,15 @@ export function createMenuScreen(context: AppContext): GameScreen {
   ]);
 
   refreshAccount()
-    .then(updatePilot)
+    .then(() => {
+      updatePilot();
+      // A conta chegou depois do primeiro desenho: redesenha o Ranqueado com a patente.
+      const current = selected;
+      if (MODES[current]?.intent === 'ranked') {
+        selected = -1;
+        select(current);
+      }
+    })
     .catch(() => {
       // Servidor fora do ar: o menu funciona do mesmo jeito (Treino e Garagem são locais).
     });

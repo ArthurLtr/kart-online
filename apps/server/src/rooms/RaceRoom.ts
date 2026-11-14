@@ -135,6 +135,7 @@ export class RaceRoom extends Room {
       account?.cosmetics ?? sanitizeCosmetics(options.cosmetics),
       account?.userId ?? null,
       account ? account.paint : sanitizeCustomPaint(options.paint),
+      account?.rating ?? null,
     );
     if (slot < 0) {
       client.leave(4000, 'Sala cheia ou corrida em andamento');

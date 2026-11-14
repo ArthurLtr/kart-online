@@ -22,6 +22,8 @@ import {
   presetLimit,
   priceIn,
   levelView,
+  rankChange,
+  rankTierByName,
   ratingView,
   sanitizeCosmetics,
   sanitizeCustomPaint,
@@ -54,6 +56,8 @@ export interface PlayerIdentity {
   guest: boolean;
   cosmetics: Cosmetics;
   paint: CustomPaint | null;
+  /** Pontos de Ranqueado na temporada; `null` em posicionamento (patente no lobby). */
+  rating: number | null;
 }
 
 /**
@@ -455,6 +459,9 @@ export class Accounts {
         timeTicks: result.timeTicks,
         bestLapTicks: result.bestLapTicks,
         pointsDelta: result.pointsDelta,
+        rankBefore: rankTierByName(result.divisionBefore)?.id ?? null,
+        rankAfter: rankTierByName(result.divisionAfter)?.id ?? null,
+        ...rankChange(result.divisionBefore, result.divisionAfter),
         xp: result.xpGained,
         coins: result.coinsGained,
         endedAt: result.match.endedAt.toISOString(),
@@ -516,9 +523,14 @@ export class Accounts {
       include: { profile: true },
     });
     if (!user) return null;
-    const { loadout, paint } = await this.look(userId, await this.owned(userId));
+    const [{ loadout, paint }, rated] = await Promise.all([
+      this.owned(userId).then((owned) => this.look(userId, owned)),
+      this.season().then((season) => this.rating(userId, season.id)),
+    ]);
+    const view = ratingView(rated.mu, rated.sigma, rated.matches);
     return {
       userId,
+      rating: view.division ? view.points : null,
       name: user.profile?.nickname ?? 'Piloto',
       guest: user.isGuest || !user.hasCompletedOnboarding,
       cosmetics: loadout,

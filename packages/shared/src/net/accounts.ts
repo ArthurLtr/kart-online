@@ -1,6 +1,8 @@
 import type { LevelView, QueueKind } from './progression.js';
 import type { Cosmetics, CustomPaint } from './protocol.js';
 import { sanitizeCosmetics, sanitizeCustomPaint } from './protocol.js';
+import type { RankTierId } from './ranks.js';
+import { RANK_TIERS, rankTierOf } from './ranks.js';
 
 /** Visual completo guardado com um nome, para trocar com um clique. */
 export interface PresetData {
@@ -30,15 +32,8 @@ export function sanitizePresets(value: unknown): PresetData[] {
   return presets;
 }
 
-export const DIVISIONS = [
-  { name: 'Bronze', min: 0 },
-  { name: 'Prata', min: 800 },
-  { name: 'Ouro', min: 1300 },
-  { name: 'Platina', min: 1800 },
-  { name: 'Diamante', min: 2300 },
-  { name: 'Mestre', min: 2800 },
-  { name: 'Lenda', min: 3300 },
-] as const;
+/** Divisões = patentes (ver ranks.ts). */
+export const DIVISIONS = RANK_TIERS.map((tier) => ({ name: tier.name, min: tier.minRating }));
 
 /** Partidas de posicionamento antes de a divisão aparecer. */
 export const PLACEMENT_MATCHES = 5;
@@ -48,11 +43,7 @@ export function ratingPoints(mu: number, sigma: number): number {
   return Math.max(0, Math.round((mu - 3 * sigma) * 100));
 }
 
-export function divisionOf(points: number): string {
-  let name: string = DIVISIONS[0].name;
-  for (const division of DIVISIONS) if (points >= division.min) name = division.name;
-  return name;
-}
+export const divisionOf = (points: number): string => rankTierOf(points).name;
 
 export interface RatingView {
   points: number;
@@ -91,6 +82,12 @@ export interface HistoryEntry {
   timeTicks: number | null;
   bestLapTicks: number | null;
   pointsDelta: number | null;
+  /** Patente antes e depois da corrida ranqueada (`null` = posicionamento ou outro modo). */
+  rankBefore: RankTierId | null;
+  rankAfter: RankTierId | null;
+  /** Subiu (ou saiu do posicionamento) / caiu de patente nesta corrida. */
+  promoted: boolean;
+  demoted: boolean;
   /** Experiência e moedas ganhas na corrida. */
   xp: number;
   coins: number;

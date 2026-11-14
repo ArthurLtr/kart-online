@@ -55,7 +55,8 @@ describe('rating OpenSkill', () => {
     expect(divisionOf(1300)).toBe('Ouro');
     expect(divisionOf(1800)).toBe('Platina');
     expect(divisionOf(2300)).toBe('Diamante');
-    expect(divisionOf(2800)).toBe('Mestre');
+    expect(divisionOf(2899)).toBe('Diamante');
+    expect(divisionOf(2900)).toBe('Lenda');
     expect(divisionOf(9999)).toBe('Lenda');
     expect(ratingPoints(25, 25 / 3)).toBe(0);
     // Durante as 5 partidas de posicionamento a divisão não aparece.

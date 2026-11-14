@@ -27,6 +27,7 @@ import { block, field } from '../ui/sections';
 import { updatePilot } from '../ui/shell';
 import { formatCoins } from '../ui/buy';
 import { burstToPilot } from '../ui/currency';
+import { createRankBadgeElement, createRankHighlight, createRankResult } from '../ui/RankBadge';
 import { getSettings } from '../settings';
 import { createNameTags } from '../ui/nameTags';
 import type { PlayIntent } from './menuScreen';
@@ -298,6 +299,9 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     mode('Sala privada', 'Cria uma sala e gera um código para chamar os amigos.', () =>
       join('private'),
     );
+    const pilot = currentAccount();
+    // Patente atual em destaque antes de escolher a fila.
+    if (pilot) panel.append(createRankHighlight(pilot.rating));
     panel.append(modes);
 
     const codeRow = el('form', 'codigo-form');
@@ -380,6 +384,9 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       item.dataset.voce = String(entry.slot === message.you);
       item.dataset.pronto = String(entry.ready);
       const name = el('span', 'piloto-linha-nome', entry.name);
+      if (!entry.bot && entry.rating !== null) {
+        name.append(createRankBadgeElement(entry.rating, { size: 'sm', showLabel: false }));
+      }
       if (entry.slot === message.you) name.append(el('span', 'etiqueta', 'Você'));
       item.append(
         el('span', 'piloto-linha-vaga', String(entry.slot + 1).padStart(2, '0')),
@@ -437,6 +444,10 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       const penalty = result.penaltyTicks > 0 ? ` (+${result.penaltyTicks / SIM_HZ} s)` : '';
       const name = el('span', 'resultado-nome', result.name);
       if (result.bot) name.append(el('span', 'etiqueta', 'Bot'));
+      const rated = message.roster.find((entry) => entry.slot === result.slot)?.rating ?? null;
+      if (!result.bot && rated !== null) {
+        name.append(createRankBadgeElement(rated, { size: 'sm', showLabel: false }));
+      }
       const times = el('span', 'resultado-tempos');
       times.append(
         el('strong', '', result.finished ? formatTime(result.timeTicks) + penalty : 'Não terminou'),
@@ -475,6 +486,17 @@ export function createOnlineScreen(context: AppContext): GameScreen {
               }
               const line = panel.querySelector('.rating');
               if (line) line.textContent = ratingLine;
+              if (line && message.mode === 'ranked' && last?.mode === 'ranked') {
+                line.before(
+                  createRankResult(
+                    rating.points,
+                    last.pointsDelta,
+                    last.promoted,
+                    last.demoted,
+                    rating.division !== null,
+                  ),
+                );
+              }
               updatePilot();
             })
             .catch(() => {});

@@ -81,6 +81,8 @@ interface Seat {
   violations: number;
   plan: BotPlan | null;
   userId: string | null;
+  /** Pontos de Ranqueado (patente no lobby); `null` para bot ou em posicionamento. */
+  rating?: number | null;
   laps: number[];
 }
 
@@ -171,6 +173,7 @@ export class RaceSession {
     cosmetics: Cosmetics,
     userId: string | null = null,
     paint: CustomPaint | null = null,
+    rating: number | null = null,
   ): number {
     if (this.phase !== 'lobby' || this.seats.length >= MAX_KARTS) return -1;
     this.seats.push({
@@ -189,6 +192,7 @@ export class RaceSession {
       violations: 0,
       plan: null,
       userId,
+      rating,
       laps: [],
     });
     return this.seats.length - 1;
@@ -458,6 +462,7 @@ export class RaceSession {
       connected: seat.connected,
       ready: seat.ready,
       cosmetics: seat.cosmetics,
+      rating: seat.rating ?? null,
     }));
   }
 

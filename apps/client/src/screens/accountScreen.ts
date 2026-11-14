@@ -1,9 +1,10 @@
-import type { HistoryEntry, MeResponse, RankingEntry } from '@kart/shared';
+import type { HistoryEntry, MeResponse, RankingEntry, RankTierId } from '@kart/shared';
 import { CATALOG_ITEMS, levelTitle, RARITIES, SIM_HZ } from '@kart/shared';
 import { SLOT_LABELS } from '../cosmetics/catalog';
 import type { Loadout } from '../cosmetics/catalog';
 import { currentAccount, fetchRanking, logout, refreshAccount } from '../net/account';
 import { btn, el } from '../ui/dom';
+import { createRankBadgeElement } from '../ui/RankBadge';
 import type { SectionDef } from '../ui/sections';
 import { block, createSections, stat } from '../ui/sections';
 import { initials, reopenScreen, setHints, updatePilot } from '../ui/shell';
@@ -40,7 +41,7 @@ const plural = (count: number, one: string, many: string): string =>
 
 function table(
   headers: readonly string[],
-  rows: readonly { cells: readonly string[]; you?: boolean }[],
+  rows: readonly { cells: readonly (string | Node)[]; you?: boolean }[],
 ): HTMLTableElement {
   const node = el('table', 'tabela');
   const head = node.createTHead().insertRow();
@@ -53,9 +54,20 @@ function table(
   for (const row of rows) {
     const line = body.insertRow();
     if (row.you) line.className = 'voce';
-    for (const cell of row.cells) line.insertCell().textContent = cell;
+    for (const cell of row.cells) {
+      if (typeof cell === 'string') line.insertCell().textContent = cell;
+      else line.insertCell().append(cell);
+    }
   }
   return node;
+}
+
+/** Pontos da corrida ranqueada com a insígnia da patente com que o piloto saiu dela. */
+function pointsCell(delta: number, rank: RankTierId | null): HTMLElement {
+  const cell = el('span', 'celula-patente');
+  if (rank) cell.append(createRankBadgeElement(rank, { size: 'sm', showLabel: false }));
+  cell.append(`${delta >= 0 ? '+' : '−'}${Math.abs(delta)}`);
+  return cell;
 }
 
 const historyRows = (history: readonly HistoryEntry[]) =>
@@ -67,7 +79,7 @@ const historyRows = (history: readonly HistoryEntry[]) =>
         `${row.position}º de ${row.karts}`,
         formatTime(row.timeTicks),
         formatTime(row.bestLapTicks),
-        delta === null ? '—' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)}`,
+        delta === null ? '—' : pointsCell(delta, row.rankAfter),
         `+${row.xp}`,
         `+${row.coins}`,
       ],
@@ -110,10 +122,11 @@ export function createAccountScreen(context: AppContext): GameScreen {
             el('strong', 'perfil-nome', user.name),
             el('span', 'perfil-conta', user.email ?? ''),
           );
+          // Insígnia compacta da patente ao lado do nome do piloto.
           card.append(
             el('span', 'perfil-sigla', initials(user.name)),
             text,
-            el('span', 'etiqueta', division),
+            createRankBadgeElement(rating.division ? rating.points : null, { size: 'sm' }),
           );
           const { level } = me;
           const bar = el('div', 'nivel');
@@ -364,7 +377,7 @@ export function createAccountScreen(context: AppContext): GameScreen {
                   cells: [
                     `${row.position}º`,
                     row.name,
-                    row.division ?? 'Posicionamento',
+                    createRankBadgeElement(row.division ? row.points : null, { size: 'sm' }),
                     String(row.points),
                     String(row.matches),
                   ],

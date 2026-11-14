@@ -38,6 +38,8 @@ export interface RosterEntry {
   connected: boolean;
   ready: boolean;
   cosmetics: Cosmetics | null;
+  /** Pontos de Ranqueado da conta (patente no lobby); `null` para bot ou em posicionamento. */
+  rating: number | null;
 }
 
 export interface ResultEntry {

@@ -1,8 +1,11 @@
-// Recorta as artes da economia (referencias/icone  das moedas) em ícones WebP com
+// Recorta as artes da economia (referencias/icones-moedas-petenttes-E.T.C) em ícones WebP com
 // fundo transparente para o cliente. Uso: node tools/assets/convert.mjs currency
 import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
+
+/** Pasta das artes de moedas, gemas e patentes. */
+export const ART_DIR = 'icones-moedas-petenttes-E.T.C';
 
 /** Cada arte: arquivo de origem (pela proporção), recorte [x, y, largura, altura] e tamanho final. */
 const CUTS = [
@@ -14,7 +17,7 @@ const CUTS = [
 ];
 
 /** Tira o fundo cinza-escuro liso: perto da cor do canto vira transparente, com borda suave. */
-async function keyed(file, [left, top, width, height]) {
+export async function keyed(file, [left, top, width, height]) {
   const { data, info } = await sharp(file)
     .extract({ left, top, width, height })
     .ensureAlpha()
@@ -30,7 +33,7 @@ async function keyed(file, [left, top, width, height]) {
 }
 
 export async function convertCurrency(refs, publicDir) {
-  const dir = join(refs, 'icone  das moedas');
+  const dir = join(refs, ART_DIR);
   const outDir = join(publicDir, 'currency');
   if (!existsSync(dir)) throw new Error(`Pasta ausente: ${dir}`);
   mkdirSync(outDir, { recursive: true });
