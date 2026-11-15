@@ -39,11 +39,25 @@ function readBestLap(): number | null {
 export function createTrainingScreen(context: AppContext): GameScreen {
   const view = new RaceView(context);
   const { track, environment, audio } = view;
-  const controls = new Controls();
+  const controls = new Controls({
+    touchExtras: [
+      { label: '↻', title: 'Recomeçar', run: () => restart() },
+      {
+        label: 'Menu',
+        title: 'Voltar ao menu',
+        run: () => {
+          window.location.hash = 'menu';
+        },
+      },
+    ],
+  });
+  controls.setTouchVisible(true);
   const hud = createHud(context.ui, track);
-  hud.setHelp(
-    'W/↑ acelera · S/↓ freia e dá ré · A D/← → vira · Espaço drift · Shift olha para trás · R recomeça · P piloto automático · M som · Esc menu',
-  );
+  if (!controls.hasTouch) {
+    hud.setHelp(
+      'W/↑ acelera · S/↓ freia e dá ré · A D/← → vira · Espaço drift · Shift olha para trás · R recomeça · P piloto automático · M som · Esc menu',
+    );
+  }
 
   let race: RaceState;
   let previous: KartState;
@@ -93,7 +107,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
 
   /** Um tick da simulação, com os eventos que a interface e o áudio acompanham. */
   const tick = (): void => {
-    const state = controls.read();
+    const state = controls.read(race.tick >= race.goTick);
     const kart = race.karts[0] as KartState;
     if (autopilot) {
       // Demonstração: o mesmo piloto automático dos bots, com as mesmas entradas de um jogador.

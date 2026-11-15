@@ -1,0 +1,609 @@
+/* Celular deitado (e qualquer janela baixa): modo compacto.
+   Em aparelho de toque o <html> ganha a classe "toque" (ui/mobile.ts). */
+
+/* --- aviso de girar: só em aparelho de toque, em pé ------------------------------ */
+
+.girar {
+  display: none;
+}
+
+html.toque[data-retrato='true'] .girar {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--e5);
+  padding: var(--e6);
+  background: var(--fundo);
+  color: var(--texto);
+  text-align: center;
+}
+
+.girar p {
+  margin: 0;
+  max-width: 18ch;
+  font: italic 700 var(--t-xl) / 1.15 var(--fonte-titulo);
+  text-transform: uppercase;
+}
+
+.girar-icone {
+  width: 56px;
+  height: 92px;
+  border: 4px solid var(--acento);
+  border-radius: 12px;
+  animation: girar-celular 2.4s var(--curva) infinite;
+}
+
+@keyframes girar-celular {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  55%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .girar-icone {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}
+
+/* Toque: nada de seleção, menu de toque longo nem destaque azul ao tocar. */
+html.toque {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.toque #ui {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.toque #ui :is(input, textarea) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* --- modo compacto: tela baixa e deitada ----------------------------------------- */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #ui {
+    gap: var(--e2);
+    padding: max(var(--e2), env(safe-area-inset-top)) max(var(--e4), env(safe-area-inset-right))
+      max(var(--e1), env(safe-area-inset-bottom)) max(var(--e4), env(safe-area-inset-left));
+  }
+
+  .topo {
+    gap: var(--e3);
+    min-height: 36px;
+  }
+
+  .marca span,
+  .piloto-texto,
+  .dicas {
+    display: none;
+  }
+
+  .abas a {
+    padding-block: var(--e1);
+    font-size: var(--t-s);
+  }
+
+  .rodape {
+    min-height: 0;
+  }
+
+  #status {
+    font-size: 0.6875rem;
+  }
+
+  .titulo-xl {
+    font-size: clamp(1.75rem, 7vh, 2.5rem);
+  }
+
+  /* Login e cadastro: cartão largo, campos em duas colunas, botão sempre à vista. */
+  .entrada-cartao {
+    width: min(100%, 560px);
+    gap: var(--e2);
+    padding: var(--e3) var(--e4) var(--e2);
+  }
+
+  .entrada-titulo {
+    font-size: var(--t-xl);
+  }
+
+  .entrada-corpo {
+    gap: var(--e2);
+  }
+
+  .entrada .formulario {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--e2) var(--e3);
+  }
+
+  .entrada .formulario > :not(.campo) {
+    grid-column: 1 / -1;
+  }
+
+  .entrada .campo-dica {
+    display: none;
+  }
+
+  .entrada .campo input {
+    min-height: 40px;
+  }
+
+  /* Menu inicial: modo escolhido à esquerda, lista dos modos à direita. */
+  .inicio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--e4);
+  }
+
+  .inicio-heroi {
+    align-self: center;
+    gap: var(--e2);
+    max-height: 100%;
+    overflow-y: auto;
+    pointer-events: auto;
+  }
+
+  #tela-ui .inicio-desc {
+    font-size: var(--t-s);
+  }
+
+  .inicio-fatos,
+  .modo-resumo,
+  .inicio-heroi .sobretitulo {
+    display: none;
+  }
+
+  .inicio-heroi .btn-g {
+    margin-top: var(--e1);
+  }
+
+  .inicio-modos {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: var(--e2);
+    overflow-y: auto;
+  }
+
+  .modo {
+    gap: 0;
+    padding: var(--e2) var(--e3) var(--e2) var(--e4);
+  }
+
+  .modo[aria-current='true'] {
+    transform: none;
+  }
+
+  .modo-nome {
+    font-size: var(--t-l);
+  }
+
+  .modo-numero {
+    font-size: var(--t-xs);
+  }
+
+  /* Garagem: categorias à esquerda, itens no meio (altura toda), kart à direita. */
+  #tela-ui[data-tela='garagem'] {
+    grid-template-columns: 132px minmax(0, 280px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--e2);
+  }
+
+  .gar-categorias {
+    grid-row: 1 / 3;
+    flex-direction: column;
+    overflow: hidden auto;
+  }
+
+  .gar-grupo,
+  .gar-categoria-valor {
+    display: none;
+  }
+
+  .gar-categoria {
+    flex: none;
+    padding-block: var(--e2);
+    font-size: var(--t-s);
+  }
+
+  .gar-itens {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    gap: var(--e2);
+    padding: var(--e3);
+  }
+
+  .gar-itens-topo .sobretitulo,
+  .gar-itens-topo .nota {
+    display: none;
+  }
+
+  .gar-titulo {
+    font-size: var(--t-l);
+  }
+
+  .gar-grade {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+
+  .gar-amostra {
+    height: 30px;
+  }
+
+  .gar-barra {
+    grid-column: 3;
+    grid-row: 2;
+    gap: var(--e2);
+  }
+
+  .gar-barra .botoes button {
+    padding: var(--e1) var(--e2);
+    font-size: var(--t-xs);
+  }
+
+  .gar-acoes button {
+    padding: var(--e2) var(--e3);
+    font-size: var(--t-s);
+  }
+
+  .gar-referencia {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  /* Perfil e Configurações: seções à esquerda, painel com a altura toda. */
+  #tela-ui:is([data-tela='config'], [data-tela='conta']) {
+    grid-template-columns: 132px minmax(0, 440px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--e2);
+  }
+
+  #tela-ui:is([data-tela='config'], [data-tela='conta']) > .gar-categorias {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  #tela-ui:is([data-tela='config'], [data-tela='conta']) > .sec-painel {
+    grid-row: 1;
+    grid-column: 2;
+    justify-self: stretch;
+    align-self: stretch;
+    width: auto;
+    max-width: none;
+    padding: var(--e3);
+  }
+
+  .sec-corpo {
+    gap: var(--e3);
+  }
+
+  .dados {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  }
+
+  /* Corrida online: painel estreito, insígnia compacta, ações sempre à vista. */
+  .online-painel {
+    width: min(360px, 100%);
+    gap: var(--e2);
+    padding: var(--e3);
+  }
+
+  .online-patente {
+    padding: var(--e2) var(--e3);
+    margin-bottom: 0;
+  }
+
+  .patente-lg .patente-icone {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .patente-lg .patente-nome strong {
+    font-size: var(--t-l);
+  }
+
+  /* O apelido vem da conta (campo só de leitura): no celular não ocupa espaço. */
+  .online-painel > .campo:has(input:disabled),
+  .online-patente .nota {
+    display: none;
+  }
+
+  /* Lobby e resultado: "Estou pronto" e "Sair" sempre à vista. */
+  .online-painel:has(.pilotos, .resultado) > .botoes:last-child {
+    position: sticky;
+    bottom: calc(var(--e3) * -1);
+    z-index: 1;
+    padding-block: var(--e2);
+    background: linear-gradient(transparent, var(--superficie-solida) 30%);
+  }
+
+  .modal-patentes,
+  .modal-compra {
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+  }
+}
+
+/* Celular pequeno deitado (até ~700 px): colunas mais estreitas para sobrar kart. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 700px) {
+  #tela-ui[data-tela='garagem'] {
+    grid-template-columns: 108px minmax(0, 240px) minmax(0, 1fr);
+  }
+
+  #tela-ui:is([data-tela='config'], [data-tela='conta']) {
+    grid-template-columns: 108px minmax(0, 1fr) minmax(0, 0.35fr);
+  }
+
+  .gar-categoria {
+    font-size: var(--t-xs);
+  }
+
+  .inicio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  }
+}
+
+/* --- controles de toque da corrida ---------------------------------------------- */
+
+.toque-controles {
+  --toque: 1;
+  --lado: max(var(--e4), env(safe-area-inset-left));
+  --lado-dir: max(var(--e4), env(safe-area-inset-right));
+  --baixo: max(var(--e3), env(safe-area-inset-bottom));
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.toque-controles[hidden] {
+  display: none;
+}
+
+.toque-controles[data-tamanho='pequeno'] {
+  --toque: 0.82;
+}
+
+.toque-controles[data-tamanho='grande'] {
+  --toque: 1.2;
+}
+
+.toque-controles :is(button, .toque-direcao) {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.toque-botao {
+  display: grid;
+  place-items: center;
+  border: 2px solid rgb(255 255 255 / 34%);
+  border-radius: 50%;
+  background: rgb(13 15 19 / 46%);
+  backdrop-filter: blur(4px);
+  color: var(--texto);
+  font: italic 700 calc(var(--t-s) * var(--toque)) / 1 var(--fonte-titulo);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition:
+    transform 60ms,
+    background 60ms;
+}
+
+.toque-botao[data-ativo] {
+  transform: scale(0.94);
+  background: rgb(220 255 46 / 34%);
+  border-color: var(--acento);
+}
+
+/* Pedais no canto inferior direito (ou esquerdo, se invertido). */
+.toque-pedais {
+  position: absolute;
+  right: var(--lado-dir);
+  bottom: var(--baixo);
+  display: grid;
+  grid-template-areas:
+    'tras drift'
+    'freio acelerar';
+  align-items: end;
+  justify-items: center;
+  gap: calc(var(--e3) * var(--toque));
+}
+
+.toque-controles[data-auto='true'] .toque-pedais {
+  grid-template-areas:
+    'tras drift'
+    'freio freio';
+}
+
+.toque-acelerar {
+  grid-area: acelerar;
+  width: calc(108px * var(--toque));
+  height: calc(108px * var(--toque));
+  border-color: var(--acento);
+  color: var(--acento);
+}
+
+.toque-freio {
+  grid-area: freio;
+  width: calc(80px * var(--toque));
+  height: calc(80px * var(--toque));
+}
+
+.toque-controles[data-auto='true'] .toque-freio {
+  width: calc(108px * var(--toque));
+  height: calc(108px * var(--toque));
+  justify-self: end;
+}
+
+.toque-drift {
+  grid-area: drift;
+  width: calc(72px * var(--toque));
+  height: calc(72px * var(--toque));
+}
+
+.toque-pequeno {
+  grid-area: tras;
+  align-self: start;
+  width: calc(48px * var(--toque));
+  height: calc(48px * var(--toque));
+  font-size: calc(var(--t-l) * var(--toque));
+}
+
+/* Direção: metade de baixo do lado esquerdo inteira é a área do volante. */
+.toque-direcao {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44vw;
+  height: 58vh;
+}
+
+.toque-base {
+  position: absolute;
+  left: calc(var(--lado) + 70px * var(--toque));
+  top: 58%;
+  width: calc(116px * var(--toque));
+  height: calc(116px * var(--toque));
+  border: 2px solid rgb(255 255 255 / 26%);
+  border-radius: 50%;
+  background: rgb(13 15 19 / 30%);
+  transform: translate(-50%, -50%);
+  opacity: 0.55;
+}
+
+.toque-base[data-ativo] {
+  opacity: 1;
+}
+
+.toque-pino {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: calc(52px * var(--toque));
+  height: calc(52px * var(--toque));
+  margin: calc(-26px * var(--toque)) 0 0 calc(-26px * var(--toque));
+  border-radius: 50%;
+  background: rgb(245 244 240 / 78%);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 40%);
+}
+
+.toque-dica {
+  position: absolute;
+  left: var(--lado);
+  bottom: var(--baixo);
+  color: var(--texto-2);
+  font: 600 var(--t-xs) / 1 var(--fonte);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.toque-controles[data-direcao='botoes'] .toque-direcao {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--e3) * var(--toque));
+  width: auto;
+  height: auto;
+  left: var(--lado);
+  bottom: var(--baixo);
+}
+
+.toque-seta {
+  width: calc(86px * var(--toque));
+  height: calc(86px * var(--toque));
+  font-size: calc(var(--t-xl) * var(--toque));
+}
+
+/* Canhotos: pedais à esquerda, direção à direita. */
+.toque-controles[data-invertido='true'] .toque-pedais {
+  right: auto;
+  left: var(--lado);
+}
+
+.toque-controles[data-invertido='true'] .toque-direcao {
+  left: auto;
+  right: 0;
+}
+
+.toque-controles[data-invertido='true'][data-direcao='botoes'] .toque-direcao {
+  right: var(--lado-dir);
+}
+
+.toque-controles[data-invertido='true'] .toque-base {
+  left: auto;
+  right: calc(var(--lado-dir) + 10px * var(--toque));
+}
+
+.toque-controles[data-invertido='true'] .toque-dica {
+  left: auto;
+  right: var(--lado-dir);
+}
+
+/* Recomeçar, menu e tela cheia: pequenos, abaixo da posição no canto de cima. */
+.toque-topo {
+  position: absolute;
+  top: calc(max(var(--e2), env(safe-area-inset-top)) + 58px);
+  left: var(--lado);
+  display: flex;
+  gap: var(--e2);
+}
+
+.toque-extra {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 var(--e3);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio);
+  background: rgb(13 15 19 / 56%);
+  color: var(--texto);
+  font: 600 var(--t-s) / 1 var(--fonte);
+}
+
+/* --- HUD da corrida no toque: cantos de baixo livres para os controles ----------- */
+
+html.toque .hud-ajuda {
+  display: none;
+}
+
+html.toque .hud-painel {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: center;
+  align-self: end;
+  min-width: 0;
+  padding: var(--e1) var(--e3);
+}
+
+html.toque :is(.hud-giro, .hud-rpm) {
+  display: none;
+}
+
+html.toque .hud-velocidade strong {
+  font-size: clamp(1.75rem, 9vh, 2.75rem);
+}
+
+html.toque .hud-tempos {
+  width: 140px;
+  padding: var(--e2) var(--e3);
+}
+
+html.toque .hud-tempo {
+  font-size: var(--t-l);
+}
+
+/* Na corrida pelo toque, a linha de status do rodapé daria lugar à dica do volante. */
+html.toque body:is([data-tela='treino'], [data-tela='corrida']) .rodape {
+  visibility: hidden;
+}

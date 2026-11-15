@@ -1,4 +1,4 @@
-import type { Action, Quality } from '../settings';
+import type { Action, Quality, TouchSize, TouchSteer } from '../settings';
 import {
   ACTIONS,
   DEFAULT_KEYS,
@@ -9,8 +9,11 @@ import {
   QUALITY_NAMES,
   remapKey,
   suggestQuality,
+  TOUCH_SIZES,
+  TOUCH_STEER,
   updateSettings,
 } from '../settings';
+import { isTouchDevice } from '../ui/mobile';
 import { btn, el } from '../ui/dom';
 import type { SectionDef } from '../ui/sections';
 import { block, createSections, stat, toggleRow } from '../ui/sections';
@@ -30,7 +33,8 @@ const GAMEPAD_MAP: readonly (readonly [string, string])[] = [
 export function createSettingsScreen(context: AppContext): GameScreen {
   const showroom = createShowroom(context);
   const gpu = gpuName(context.renderer.getContext());
-  const suggested = suggestQuality(gpu, navigator.hardwareConcurrency ?? 4);
+  const touchDevice = isTouchDevice();
+  const suggested = touchDevice ? 'baixo' : suggestQuality(gpu, navigator.hardwareConcurrency ?? 4);
   const sections = createSections('Seções das configurações');
   let listening: { action: Action; index: 0 | 1 } | null = null;
 
@@ -68,7 +72,7 @@ export function createSettingsScreen(context: AppContext): GameScreen {
         el(
           'p',
           'nota',
-          `Sugerido para este computador: ${QUALITY[suggested].label}. Resolução e pós-processamento mudam na hora; sombras e cenário, ao entrar na pista.`,
+          `Sugerido para este ${touchDevice ? 'aparelho' : 'computador'}: ${QUALITY[suggested].label}. Resolução e pós-processamento mudam na hora; sombras e cenário, ao entrar na pista.`,
         ),
       ),
       block(
@@ -168,6 +172,77 @@ export function createSettingsScreen(context: AppContext): GameScreen {
     }
   }
 
+  const STEER_LABELS: Record<TouchSteer, string> = { arrastar: 'Arrastar', botoes: 'Botões' };
+  const SIZE_LABELS: Record<TouchSize, string> = {
+    pequeno: 'Pequeno',
+    medio: 'Médio',
+    grande: 'Grande',
+  };
+
+  /** Grupo de botões de escolha única (como o da qualidade). */
+  function choice<T extends string>(
+    label: string,
+    options: readonly T[],
+    labels: Record<T, string>,
+    current: T,
+    pick: (value: T) => void,
+  ): HTMLElement {
+    const row = el('div', 'botoes seg');
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', label);
+    for (const option of options) {
+      const button = btn('', labels[option], () => {
+        pick(option);
+        sections.refresh();
+      });
+      button.setAttribute('aria-pressed', String(option === current));
+      row.append(button);
+    }
+    return row;
+  }
+
+  function renderTouch(body: HTMLElement): void {
+    const settings = getSettings();
+    body.append(
+      block(
+        'Direção',
+        choice('Direção no toque', TOUCH_STEER, STEER_LABELS, settings.touchSteer, (touchSteer) =>
+          updateSettings({ touchSteer }),
+        ),
+        el(
+          'p',
+          'nota',
+          'Arrastar: encoste o dedo do lado da direção e deslize para os lados (vira mais ou menos, como um volante). Botões: duas setas.',
+        ),
+      ),
+      block(
+        'Botões na tela',
+        choice('Tamanho dos botões', TOUCH_SIZES, SIZE_LABELS, settings.touchSize, (touchSize) =>
+          updateSettings({ touchSize }),
+        ),
+        toggleRow(
+          'Aceleração automática',
+          'O kart acelera sozinho; segure o freio para frear ou dar ré',
+          settings.touchAutoAccel,
+          (checked) => updateSettings({ touchAutoAccel: checked }),
+        ),
+        toggleRow(
+          'Inverter lados',
+          'Pedais à esquerda e direção à direita',
+          settings.touchSwap,
+          (checked) => updateSettings({ touchSwap: checked }),
+        ),
+      ),
+      el(
+        'p',
+        'nota',
+        touchDevice
+          ? 'Vale na próxima corrida. Jogue sempre com o celular deitado.'
+          : 'Estes controles aparecem só em celular e tablet.',
+      ),
+    );
+  }
+
   let padName: string | null = null;
   function renderGamepad(body: HTMLElement): void {
     const pad = connectedPad();
@@ -218,6 +293,15 @@ export function createSettingsScreen(context: AppContext): GameScreen {
       note: 'Duas teclas para cada ação',
       value: () => `${ACTIONS.length} ações`,
       render: renderKeys,
+    },
+    {
+      id: 'toque',
+      group: 'Controles',
+      label: 'Toque',
+      note: 'Controles na tela do celular',
+      value: () =>
+        `${STEER_LABELS[getSettings().touchSteer]} · ${getSettings().touchAutoAccel ? 'acelera sozinho' : 'acelerador manual'}`,
+      render: renderTouch,
     },
     {
       id: 'gamepad',

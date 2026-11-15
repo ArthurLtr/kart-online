@@ -15,10 +15,28 @@ const number = (name: string, fallback: number): number => {
   return env[name] !== undefined && Number.isFinite(value) ? value : fallback;
 };
 
+/**
+ * Porta do servidor. SERVER_PORT sempre vence. PORT (a que as hospedagens
+ * definem) só vale em produção: em desenvolvimento ferramentas como o preview
+ * definem PORT para o cliente, e o servidor não pode subir na porta dele.
+ */
+export function resolvePort(vars: NodeJS.ProcessEnv): number {
+  const read = (value: string | undefined): number | null => {
+    const parsed = Number(value?.trim());
+    return value !== undefined && value.trim() !== '' && Number.isInteger(parsed) && parsed > 0
+      ? parsed
+      : null;
+  };
+  return (
+    read(vars.SERVER_PORT) ??
+    (vars.NODE_ENV === 'production' ? read(vars.PORT) : null) ??
+    SERVER_DEFAULT_PORT
+  );
+}
+
 export const config = {
   production: env.NODE_ENV === 'production',
-  /** SERVER_PORT, ou PORT (o nome que a maioria das hospedagens define). */
-  port: number('SERVER_PORT', number('PORT', SERVER_DEFAULT_PORT)),
+  port: resolvePort(env),
   /**
    * Pasta do cliente já compilado (apps/client/dist). Com ela, este servidor
    * entrega o jogo, a API e o WebSocket no mesmo endereço.

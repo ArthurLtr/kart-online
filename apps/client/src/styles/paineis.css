@@ -747,6 +747,8 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
 
 .entrada {
   display: grid;
+  /* Linha com a altura da tela: o cartão encolhe e o formulário rola por dentro. */
+  grid-template-rows: minmax(0, 1fr);
   align-content: start;
   justify-items: start;
   min-height: 0;
@@ -754,6 +756,7 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
 }
 
 .entrada-cartao {
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--e4);
@@ -819,6 +822,15 @@ body[data-tela='entrar'] :is(.abas, .piloto) {
   flex: 1;
   height: 1px;
   background: var(--linha);
+}
+
+/* O botão de enviar fica sempre à vista, mesmo com o formulário rolando. */
+.entrada .formulario > .botoes {
+  position: sticky;
+  bottom: calc(var(--e1) * -1);
+  z-index: 1;
+  padding-block: var(--e2) var(--e1);
+  background: linear-gradient(transparent, var(--superficie-solida) 30%);
 }
 
 .botoes.seg.entrada-abas {

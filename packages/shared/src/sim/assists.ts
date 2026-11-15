@@ -48,6 +48,19 @@ export const GAMEPAD_ASSISTS: AssistSettings = {
   stability: 0.5,
 };
 
+/**
+ * Padrão para o volante de toque (arrastar o dedo): analógico como o gamepad,
+ * mas o dedo treme e escorrega, então suaviza mais e ajuda mais em alta.
+ */
+export const TOUCH_ASSISTS: AssistSettings = {
+  steerRate: 5,
+  steerReturnRate: 8,
+  steerAtTopSpeed: 0.35,
+  pedalRate: 8,
+  counterSteer: 0.6,
+  stability: 0.8,
+};
+
 export const NO_ASSISTS: AssistSettings = {
   steerRate: 0,
   steerReturnRate: 0,

@@ -1,4 +1,8 @@
 import { quality } from '../settings';
+import { isTouchDevice } from '../ui/mobile';
+
+/** Teto de resolução no celular: telas de 3x gastariam bateria sem ganho visível. */
+const TOUCH_MAX_RATIO = 1.5;
 import { NoToneMapping, PCFSoftShadowMap, SRGBColorSpace, WebGLRenderer } from 'three';
 
 export function createRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
@@ -27,5 +31,5 @@ export function applyRendererQuality(renderer: WebGLRenderer): void {
     preset.pixelRatio < 1
       ? preset.pixelRatio
       : Math.min(window.devicePixelRatio, preset.pixelRatio);
-  renderer.setPixelRatio(ratio);
+  renderer.setPixelRatio(isTouchDevice() ? Math.min(ratio, TOUCH_MAX_RATIO) : ratio);
 }

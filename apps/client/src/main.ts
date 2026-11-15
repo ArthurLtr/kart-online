@@ -27,6 +27,7 @@ import {
   suggestQuality,
   updateSettings,
 } from './settings';
+import { isTouchDevice, setupMobile } from './ui/mobile';
 import { setHints, updatePilot } from './ui/shell';
 
 const SCREENS = {
@@ -46,11 +47,16 @@ const status = document.querySelector<HTMLElement>('#status');
 const ui = document.querySelector<HTMLElement>('#tela-ui');
 if (!canvas || !status || !ui) throw new Error('index.html sem #cena, #status ou #tela-ui');
 
+setupMobile();
 const renderer = createRenderer(canvas);
 if (isFirstRun()) {
   // Primeira visita: começa no preset sugerido para a placa de vídeo (sem gravar a escolha).
+  // No celular, sempre no Baixo: bateria e temperatura pesam mais que a imagem.
   const gpu = gpuName(renderer.getContext());
-  updateSettings({ quality: suggestQuality(gpu, navigator.hardwareConcurrency ?? 4) }, false);
+  const suggested = isTouchDevice()
+    ? 'baixo'
+    : suggestQuality(gpu, navigator.hardwareConcurrency ?? 4);
+  updateSettings({ quality: suggested }, false);
   applyRendererQuality(renderer);
 }
 renderer.info.autoReset = false; // somamos os draw calls de todas as passadas do quadro

@@ -131,9 +131,12 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   let ratingLine = '';
   let ratingAsked = false;
   let intent: PlayIntent | null = takePlayIntent();
-  hud.setHelp(
-    'W/↑ acelera · S/↓ freia · A D/← → vira · Espaço drift · Shift olha para trás · F3 rede',
-  );
+  // No celular a ajuda de teclado não serve: os controles estão na tela.
+  if (!controls.hasTouch) {
+    hud.setHelp(
+      'W/↑ acelera · S/↓ freia · A D/← → vira · Espaço drift · Shift olha para trás · F3 rede',
+    );
+  }
   const debug = createDebugPanel(ui, connection.conditions);
   ui.append(panel);
 
@@ -233,6 +236,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     rosterKey = '';
     view.clearRoster();
     hud.setVisible(false);
+    controls.setTouchVisible(false);
     clearPanel();
     heading('Corrida online', 'Escolha o modo');
     if (error) paragraph(error, 'erro').setAttribute('role', 'alert');
@@ -520,6 +524,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     const previous = phase;
     room = message;
     hud.setVisible(message.phase === 'race');
+    controls.setTouchVisible(message.phase === 'race');
     phase = message.phase;
 
     if (message.phase === 'lobby') {
@@ -619,8 +624,8 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   /** Um tick local: lê os comandos, prevê o próprio kart e manda a entrada ao servidor. */
   function tick(): void {
     if (!room || !snapshot || !predictor) return;
-    const state = controls.read();
     const racing = snapshot.tick >= snapshot.goTick;
+    const state = controls.read(racing);
     const finished = snapshot.progress[room.you]?.finishTick != null;
     // Depois da bandeirada o servidor freia o kart sozinho; a predição faz o mesmo.
     input = finished
@@ -639,6 +644,9 @@ export function createOnlineScreen(context: AppContext): GameScreen {
     }
   };
   window.addEventListener('keydown', onKeyDown);
+  // No celular não há tecla: o primeiro toque destrava o áudio.
+  const onPointerDown = (): void => audio.unlock();
+  window.addEventListener('pointerdown', onPointerDown);
   showMenu();
 
   const screen: GameScreen = {
@@ -753,6 +761,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
       if (queueTimer) void queue.leave().catch(() => {});
       stopQueue();
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pointerdown', onPointerDown);
       connection.close();
       controls.dispose();
       hud.dispose();
