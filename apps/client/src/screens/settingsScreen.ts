@@ -1,4 +1,4 @@
-import type { Action, Quality, TouchSize, TouchSteer } from '../settings';
+import type { Action, Quality, TouchSize } from '../settings';
 import {
   ACTIONS,
   DEFAULT_KEYS,
@@ -10,7 +10,6 @@ import {
   remapKey,
   suggestQuality,
   TOUCH_SIZES,
-  TOUCH_STEER,
   updateSettings,
 } from '../settings';
 import { isTouchDevice } from '../ui/mobile';
@@ -172,7 +171,6 @@ export function createSettingsScreen(context: AppContext): GameScreen {
     }
   }
 
-  const STEER_LABELS: Record<TouchSteer, string> = { arrastar: 'Arrastar', botoes: 'Botões' };
   const SIZE_LABELS: Record<TouchSize, string> = {
     pequeno: 'Pequeno',
     medio: 'Médio',
@@ -205,14 +203,11 @@ export function createSettingsScreen(context: AppContext): GameScreen {
     const settings = getSettings();
     body.append(
       block(
-        'Direção',
-        choice('Direção no toque', TOUCH_STEER, STEER_LABELS, settings.touchSteer, (touchSteer) =>
-          updateSettings({ touchSteer }),
-        ),
+        'Como jogar',
         el(
           'p',
           'nota',
-          'Arrastar: encoste o dedo do lado da direção e deslize para os lados (vira mais ou menos, como um volante). Botões: duas setas.',
+          'Setas ◀ ▶ à esquerda: deslize o polegar de uma para a outra sem levantar. À direita: Acelerar (o maior), Freio / Ré ao lado e Drift logo acima.',
         ),
       ),
       block(
@@ -221,14 +216,8 @@ export function createSettingsScreen(context: AppContext): GameScreen {
           updateSettings({ touchSize }),
         ),
         toggleRow(
-          'Aceleração automática',
-          'O kart acelera sozinho; segure o freio para frear ou dar ré',
-          settings.touchAutoAccel,
-          (checked) => updateSettings({ touchAutoAccel: checked }),
-        ),
-        toggleRow(
           'Inverter lados',
-          'Pedais à esquerda e direção à direita',
+          'Pedais à esquerda e setas à direita',
           settings.touchSwap,
           (checked) => updateSettings({ touchSwap: checked }),
         ),
@@ -299,8 +288,7 @@ export function createSettingsScreen(context: AppContext): GameScreen {
       group: 'Controles',
       label: 'Toque',
       note: 'Controles na tela do celular',
-      value: () =>
-        `${STEER_LABELS[getSettings().touchSteer]} · ${getSettings().touchAutoAccel ? 'acelera sozinho' : 'acelerador manual'}`,
+      value: () => `Botões ${SIZE_LABELS[getSettings().touchSize].toLowerCase()}`,
       render: renderTouch,
     },
     {

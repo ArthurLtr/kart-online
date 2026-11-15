@@ -625,7 +625,7 @@ export function createOnlineScreen(context: AppContext): GameScreen {
   function tick(): void {
     if (!room || !snapshot || !predictor) return;
     const racing = snapshot.tick >= snapshot.goTick;
-    const state = controls.read(racing);
+    const state = controls.read();
     const finished = snapshot.progress[room.you]?.finishTick != null;
     // Depois da bandeirada o servidor freia o kart sozinho; a predição faz o mesmo.
     input = finished

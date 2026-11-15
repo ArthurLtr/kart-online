@@ -107,7 +107,7 @@ export function createTrainingScreen(context: AppContext): GameScreen {
 
   /** Um tick da simulação, com os eventos que a interface e o áudio acompanham. */
   const tick = (): void => {
-    const state = controls.read(race.tick >= race.goTick);
+    const state = controls.read();
     const kart = race.karts[0] as KartState;
     if (autopilot) {
       // Demonstração: o mesmo piloto automático dos bots, com as mesmas entradas de um jogador.

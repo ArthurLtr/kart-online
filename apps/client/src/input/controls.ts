@@ -3,8 +3,8 @@ import { GAMEPAD_ASSISTS, KEYBOARD_ASSISTS, TOUCH_ASSISTS } from '@kart/shared';
 import type { Action, KeyMap } from '../settings';
 import { getSettings } from '../settings';
 import { isTouchDevice } from '../ui/mobile';
-import type { TouchExtra } from './touch';
-import { TouchControls } from './touch';
+import type { TouchExtra } from './MobileArcadeControls';
+import { MobileArcadeControls } from './MobileArcadeControls';
 
 /** Botões do gamepad no layout padrão (Gamepad API "standard"). */
 const PAD = { drift: 0, lookBack: 5, brake: 6, throttle: 7 } as const;
@@ -34,18 +34,22 @@ export class Controls {
   private readonly down = new Set<string>();
   private readonly gameKeys: Set<string>;
   private readonly keys: KeyMap;
-  private readonly touch: TouchControls | null;
+  private readonly touch: MobileArcadeControls | null;
   private device: Device;
+  /** Já houve toque na tela (ou é celular): os controles podem aparecer. */
+  private touchSeen = false;
+  private wantTouch = false;
 
   constructor(options: ControlsOptions = {}) {
     this.keys = options.keys ?? getSettings().keys;
     this.gameKeys = new Set(Object.values(this.keys).flat());
     const settings = getSettings();
-    this.touch = isTouchDevice()
-      ? new TouchControls(
+    // Celular e tablet mostram os controles na tela; notebook com tela de toque
+    // só depois do primeiro toque na tela (lá o normal é teclado).
+    const touchCapable = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.touch = touchCapable
+      ? new MobileArcadeControls(
           {
-            steer: settings.touchSteer,
-            autoAccel: settings.touchAutoAccel,
             size: settings.touchSize,
             swap: settings.touchSwap,
             extras: options.touchExtras ?? [],
@@ -55,7 +59,11 @@ export class Controls {
           },
         )
       : null;
-    this.device = this.touch ? 'touch' : 'keyboard';
+    this.touchSeen = isTouchDevice();
+    if (this.touch && !this.touchSeen) {
+      window.addEventListener('touchstart', this.onFirstTouch, { passive: true, once: true });
+    }
+    this.device = this.touch && this.touchSeen ? 'touch' : 'keyboard';
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
@@ -86,11 +94,13 @@ export class Controls {
     return this.keys[action].some((code) => this.down.has(code));
   }
 
-  /**
-   * `started`: a largada já foi dada. Antes do verde a aceleração automática
-   * do toque fica parada, senão o kart queima a largada sozinho.
-   */
-  read(started = true): ControlState {
+  private readonly onFirstTouch = (): void => {
+    this.touchSeen = true;
+    this.device = 'touch';
+    this.touch?.setVisible(this.wantTouch);
+  };
+
+  read(): ControlState {
     const pad = navigator.getGamepads?.().find((candidate) => candidate?.connected) ?? null;
     if (pad) {
       const stick = pad.axes[0] ?? 0;
@@ -116,14 +126,13 @@ export class Controls {
     }
     if (this.device === 'touch' && this.touch) {
       const { raw, lookBack } = this.touch.visible
-        ? this.touch.read(started)
+        ? this.touch.read()
         : { raw: { steer: 0, throttle: 0, brake: 0, drift: false }, lookBack: false };
       return {
         raw,
         lookBack,
         device: 'touch',
-        // Arrastar é analógico; com botões a direção é digital como no teclado.
-        assists: getSettings().touchSteer === 'arrastar' ? TOUCH_ASSISTS : KEYBOARD_ASSISTS,
+        assists: TOUCH_ASSISTS,
       };
     }
     return {
@@ -141,15 +150,17 @@ export class Controls {
 
   /** Controles de toque na tela (só existem no celular): mostrar na corrida, esconder fora dela. */
   setTouchVisible(visible: boolean): void {
-    this.touch?.setVisible(visible);
+    this.wantTouch = visible;
+    this.touch?.setVisible(visible && this.touchSeen);
   }
 
   /** Há controles de toque (aparelho de toque). */
   get hasTouch(): boolean {
-    return this.touch !== null;
+    return this.touch !== null && this.touchSeen;
   }
 
   dispose(): void {
+    window.removeEventListener('touchstart', this.onFirstTouch);
     this.touch?.dispose();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);

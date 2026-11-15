@@ -49,16 +49,18 @@ export const GAMEPAD_ASSISTS: AssistSettings = {
 };
 
 /**
- * Padrão para o volante de toque (arrastar o dedo): analógico como o gamepad,
- * mas o dedo treme e escorrega, então suaviza mais e ajuda mais em alta.
+ * Padrão para as setas e pedais na tela do celular. A rampa da direção já é
+ * feita nos controles de toque (ataque e retorno próprios), então aqui não há
+ * suavização extra do volante; ficam a redução em alta e a ajuda de estabilidade,
+ * como no teclado, que também é liga/desliga.
  */
 export const TOUCH_ASSISTS: AssistSettings = {
-  steerRate: 5,
-  steerReturnRate: 8,
-  steerAtTopSpeed: 0.35,
-  pedalRate: 8,
-  counterSteer: 0.6,
-  stability: 0.8,
+  steerRate: 0,
+  steerReturnRate: 0,
+  steerAtTopSpeed: 0.32,
+  pedalRate: 6,
+  counterSteer: 0.85,
+  stability: 0.9,
 };
 
 export const NO_ASSISTS: AssistSettings = {

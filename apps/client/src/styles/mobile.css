@@ -353,7 +353,7 @@ html.toque #ui :is(input, textarea) {
   }
 }
 
-/* --- controles de toque da corrida ---------------------------------------------- */
+/* --- controles de toque da corrida (setas + pedais) ------------------------------ */
 
 .toque-controles {
   --toque: 1;
@@ -379,37 +379,62 @@ html.toque #ui :is(input, textarea) {
 }
 
 .toque-controles[data-tamanho='grande'] {
-  --toque: 1.2;
+  --toque: 1.18;
 }
 
-.toque-controles :is(button, .toque-direcao) {
+.toque-controles :is(button, .toque-setas) {
   pointer-events: auto;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .toque-botao {
+  --brilho: rgb(255 255 255 / 70%);
   display: grid;
   place-items: center;
-  border: 2px solid rgb(255 255 255 / 34%);
-  border-radius: 50%;
-  background: rgb(13 15 19 / 46%);
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 30%);
+  border-radius: calc(18px * var(--toque));
+  background: rgb(13 15 19 / 48%);
   backdrop-filter: blur(4px);
   color: var(--texto);
-  font: italic 700 calc(var(--t-s) * var(--toque)) / 1 var(--fonte-titulo);
+  font: italic 700 calc(var(--t-s) * var(--toque)) / 1.05 var(--fonte-titulo);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: pre-line;
   transition:
-    transform 60ms,
-    background 60ms;
+    transform 50ms,
+    background 50ms,
+    box-shadow 50ms;
 }
 
-.toque-botao[data-ativo] {
-  transform: scale(0.94);
-  background: rgb(220 255 46 / 34%);
-  border-color: var(--acento);
+.toque-botao.is-pressed {
+  transform: scale(0.93);
+  border-color: var(--brilho);
+  background: color-mix(in srgb, var(--brilho) 30%, rgb(13 15 19 / 60%));
+  box-shadow: 0 0 calc(18px * var(--toque)) var(--brilho);
+  filter: brightness(1.2);
 }
 
-/* Pedais no canto inferior direito (ou esquerdo, se invertido). */
+/* Setas: lado a lado no canto inferior esquerdo, vão curto para o polegar deslizar. */
+.toque-setas {
+  position: absolute;
+  left: var(--lado);
+  bottom: var(--baixo);
+  display: flex;
+  gap: calc(var(--e3) * var(--toque));
+}
+
+.toque-seta {
+  --brilho: var(--acento);
+  width: calc(92px * var(--toque));
+  height: calc(92px * var(--toque));
+  font-size: calc(var(--t-2xl) * var(--toque));
+  font-style: normal;
+}
+
+/* Pedais: freio menor ao lado do acelerador grande; drift no arco do polegar, acima. */
 .toque-pedais {
   position: absolute;
   right: var(--lado-dir);
@@ -423,130 +448,52 @@ html.toque #ui :is(input, textarea) {
   gap: calc(var(--e3) * var(--toque));
 }
 
-.toque-controles[data-auto='true'] .toque-pedais {
-  grid-template-areas:
-    'tras drift'
-    'freio freio';
-}
-
 .toque-acelerar {
+  --brilho: #00e5c8;
   grid-area: acelerar;
-  width: calc(108px * var(--toque));
-  height: calc(108px * var(--toque));
-  border-color: var(--acento);
-  color: var(--acento);
+  width: calc(104px * var(--toque));
+  height: calc(132px * var(--toque));
+  border-color: rgb(0 229 200 / 55%);
+  color: #7ff5e2;
 }
 
 .toque-freio {
+  --brilho: #ff7a3d;
   grid-area: freio;
-  width: calc(80px * var(--toque));
-  height: calc(80px * var(--toque));
-}
-
-.toque-controles[data-auto='true'] .toque-freio {
-  width: calc(108px * var(--toque));
-  height: calc(108px * var(--toque));
-  justify-self: end;
+  width: calc(84px * var(--toque));
+  height: calc(100px * var(--toque));
+  border-color: rgb(255 122 61 / 50%);
+  color: #ffb08a;
 }
 
 .toque-drift {
   grid-area: drift;
-  width: calc(72px * var(--toque));
-  height: calc(72px * var(--toque));
+  width: calc(80px * var(--toque));
+  height: calc(64px * var(--toque));
+  border-radius: 999px;
 }
 
 .toque-pequeno {
   grid-area: tras;
   align-self: start;
+  justify-self: end;
   width: calc(48px * var(--toque));
   height: calc(48px * var(--toque));
+  border-radius: 50%;
   font-size: calc(var(--t-l) * var(--toque));
+  font-style: normal;
 }
 
-/* Direção: metade de baixo do lado esquerdo inteira é a área do volante. */
-.toque-direcao {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 44vw;
-  height: 58vh;
-}
-
-.toque-base {
-  position: absolute;
-  left: calc(var(--lado) + 70px * var(--toque));
-  top: 58%;
-  width: calc(116px * var(--toque));
-  height: calc(116px * var(--toque));
-  border: 2px solid rgb(255 255 255 / 26%);
-  border-radius: 50%;
-  background: rgb(13 15 19 / 30%);
-  transform: translate(-50%, -50%);
-  opacity: 0.55;
-}
-
-.toque-base[data-ativo] {
-  opacity: 1;
-}
-
-.toque-pino {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: calc(52px * var(--toque));
-  height: calc(52px * var(--toque));
-  margin: calc(-26px * var(--toque)) 0 0 calc(-26px * var(--toque));
-  border-radius: 50%;
-  background: rgb(245 244 240 / 78%);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 40%);
-}
-
-.toque-dica {
-  position: absolute;
-  left: var(--lado);
-  bottom: var(--baixo);
-  color: var(--texto-2);
-  font: 600 var(--t-xs) / 1 var(--fonte);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.toque-controles[data-direcao='botoes'] .toque-direcao {
-  display: flex;
-  align-items: flex-end;
-  gap: calc(var(--e3) * var(--toque));
-  width: auto;
-  height: auto;
-  left: var(--lado);
-  bottom: var(--baixo);
-}
-
-.toque-seta {
-  width: calc(86px * var(--toque));
-  height: calc(86px * var(--toque));
-  font-size: calc(var(--t-xl) * var(--toque));
-}
-
-/* Canhotos: pedais à esquerda, direção à direita. */
+/* Canhotos: pedais à esquerda, setas à direita (o freio continua do lado de dentro). */
 .toque-controles[data-invertido='true'] .toque-pedais {
   right: auto;
   left: var(--lado);
+  grid-template-areas:
+    'drift tras'
+    'acelerar freio';
 }
 
-.toque-controles[data-invertido='true'] .toque-direcao {
-  left: auto;
-  right: 0;
-}
-
-.toque-controles[data-invertido='true'][data-direcao='botoes'] .toque-direcao {
-  right: var(--lado-dir);
-}
-
-.toque-controles[data-invertido='true'] .toque-base {
-  left: auto;
-  right: calc(var(--lado-dir) + 10px * var(--toque));
-}
-
-.toque-controles[data-invertido='true'] .toque-dica {
+.toque-controles[data-invertido='true'] .toque-setas {
   left: auto;
   right: var(--lado-dir);
 }

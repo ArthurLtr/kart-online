@@ -82,18 +82,20 @@ export interface Settings {
   motionBlur: boolean;
   nameTags: boolean;
   keys: KeyMap;
-  /** Celular: direção arrastando o dedo (analógica) ou com dois botões. */
-  touchSteer: TouchSteer;
-  /** Celular: o kart acelera sozinho; o freio corta a aceleração. */
-  touchAutoAccel: boolean;
   /** Celular: tamanho dos botões na tela. */
   touchSize: TouchSize;
   /** Celular: pedais à esquerda e direção à direita (canhotos). */
   touchSwap: boolean;
 }
 
-export const TOUCH_STEER = ['arrastar', 'botoes'] as const;
-export type TouchSteer = (typeof TOUCH_STEER)[number];
+/**
+ * Celular: rampa das setas de direção, em cursos por segundo. Ataque 8/s =
+ * esterço total em 125 ms (desvia rápido sem dar tranco); retorno 12,5/s =
+ * volta ao centro em 80 ms (o kart alinha logo na saída da curva).
+ */
+export const MOBILE_STEER_ATTACK_RATE = 8;
+export const MOBILE_STEER_RELEASE_RATE = 12.5;
+
 export const TOUCH_SIZES = ['pequeno', 'medio', 'grande'] as const;
 export type TouchSize = (typeof TOUCH_SIZES)[number];
 
@@ -104,8 +106,6 @@ export const DEFAULT_SETTINGS: Settings = {
   motionBlur: true,
   nameTags: true,
   keys: DEFAULT_KEYS,
-  touchSteer: 'arrastar',
-  touchAutoAccel: true,
   touchSize: 'medio',
   touchSwap: false,
 };
@@ -141,10 +141,6 @@ export function sanitizeSettings(value: unknown): Settings {
     motionBlur: flag('motionBlur'),
     nameTags: flag('nameTags'),
     keys,
-    touchSteer: TOUCH_STEER.includes(raw.touchSteer as TouchSteer)
-      ? (raw.touchSteer as TouchSteer)
-      : DEFAULT_SETTINGS.touchSteer,
-    touchAutoAccel: flag('touchAutoAccel'),
     touchSize: TOUCH_SIZES.includes(raw.touchSize as TouchSize)
       ? (raw.touchSize as TouchSize)
       : DEFAULT_SETTINGS.touchSize,
