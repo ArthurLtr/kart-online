@@ -242,6 +242,26 @@ export function createLoginScreen(context: AppContext): GameScreen {
     return block;
   }
 
+  /** "Ao continuar, você concorda…" com os links dos Termos e da Política (abrem em outra aba). */
+  function legalNote(): HTMLElement {
+    const note = el('p', 'nota entrada-legal');
+    const link = (href: string, text: string): HTMLAnchorElement => {
+      const anchor = el('a', '', text);
+      anchor.href = href;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener';
+      return anchor;
+    };
+    note.append(
+      'Ao continuar, você concorda com os ',
+      link('/termos.html', 'Termos de Uso'),
+      ' e a ',
+      link('/privacidade.html', 'Política de Privacidade'),
+      '.',
+    );
+    return note;
+  }
+
   function render(): void {
     const legacyGuest = currentAccount()?.user.guest === true;
     body.replaceChildren();
@@ -264,6 +284,7 @@ export function createLoginScreen(context: AppContext): GameScreen {
         form([NAME, BIRTH], 'Criar conta', (values) => loginWithGoogle(credential, values), {
           name: suggestedName,
         }),
+        legalNote(),
         back,
       );
       body.querySelector('input')?.focus({ preventScroll: true });
@@ -306,6 +327,7 @@ export function createLoginScreen(context: AppContext): GameScreen {
       mode === 'entrar'
         ? form([EMAIL, PASSWORD], 'Entrar', login)
         : form([NAME, EMAIL, NEW_PASSWORD, BIRTH], 'Criar conta', register),
+      legalNote(),
     );
     if (legacyGuest) {
       const out = el('div', 'botoes');

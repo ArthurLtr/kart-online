@@ -1411,3 +1411,12 @@ button .valor-moeda {
 .online-patente.compacta .patente-barra {
   width: min(11rem, 40vw);
 }
+
+#tela-ui .entrada-legal {
+  color: var(--texto-3);
+  font-size: var(--t-xs);
+}
+
+.entrada-legal a {
+  color: var(--texto-2);
+}

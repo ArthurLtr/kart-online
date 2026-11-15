@@ -1,0 +1,78 @@
+/* Páginas de texto (privacidade e termos): leitura confortável no celular e no computador. */
+:root {
+  color-scheme: dark;
+  --fundo: #07080a;
+  --texto: #f5f4f0;
+  --texto-2: rgb(245 244 240 / 70%);
+  --linha: rgb(255 255 255 / 13%);
+  --acento: #dcff2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font:
+    16px / 1.6 system-ui,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+.legal {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+h1 {
+  margin: 16px 0 4px;
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+h2 {
+  margin: 32px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linha);
+  font-size: 1.15rem;
+}
+
+.data,
+.rodape-legal {
+  color: var(--texto-2);
+  font-size: 0.875rem;
+}
+
+.rodape-legal {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linha);
+}
+
+ul {
+  padding-left: 1.25rem;
+}
+
+li + li {
+  margin-top: 6px;
+}
+
+a {
+  color: var(--acento);
+}
+
+.voltar {
+  display: inline-block;
+  min-height: 44px;
+  padding: 10px 0;
+  font-weight: 600;
+  text-decoration: none;
+}
