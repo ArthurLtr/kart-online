@@ -17,7 +17,23 @@ const number = (name: string, fallback: number): number => {
 
 export const config = {
   production: env.NODE_ENV === 'production',
-  port: number('SERVER_PORT', SERVER_DEFAULT_PORT),
+  /** SERVER_PORT, ou PORT (o nome que a maioria das hospedagens define). */
+  port: number('SERVER_PORT', number('PORT', SERVER_DEFAULT_PORT)),
+  /**
+   * Pasta do cliente já compilado (apps/client/dist). Com ela, este servidor
+   * entrega o jogo, a API e o WebSocket no mesmo endereço.
+   */
+  clientDir: env.CLIENT_DIR || undefined,
+  /**
+   * Sites que podem chamar a API de outro endereço, separados por vírgula.
+   * Vazio: em desenvolvimento libera tudo; em produção, só o mesmo endereço.
+   */
+  allowedOrigins: (env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+  /** Atrás de proxy (Fly, Railway, Render, Nginx): o IP real vem de X-Forwarded-For. */
+  trustProxy: env.TRUST_PROXY === '1' || env.TRUST_PROXY === 'true',
   databaseUrl: env.DATABASE_URL ?? 'postgresql://kart:kart_dev@localhost:5432/kart_online',
   /** Sem REDIS_URL a fila de matchmaking fica na memória do processo (só desenvolvimento). */
   redisUrl: env.REDIS_URL,

@@ -32,7 +32,11 @@ function serverUrl(): string {
   const configured = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (configured) return configured;
   const secure = window.location.protocol === 'https:';
-  return `${secure ? 'wss' : 'ws'}://${window.location.hostname}:${SERVER_DEFAULT_PORT}`;
+  // Em produção o servidor entrega o próprio jogo: mesmo endereço da página.
+  const host = import.meta.env.PROD
+    ? window.location.host
+    : `${window.location.hostname}:${SERVER_DEFAULT_PORT}`;
+  return `${secure ? 'wss' : 'ws'}://${host}`;
 }
 
 const RECONNECT_ATTEMPTS = 8;

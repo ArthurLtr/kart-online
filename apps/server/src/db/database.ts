@@ -72,18 +72,26 @@ async function startEmbedded(url: URL, restart = false): Promise<void> {
   console.log('[banco] PostgreSQL embutido no ar (sem Docker)');
 }
 
-/** Cria/atualiza as tabelas a partir do schema.prisma (só em desenvolvimento). */
-function pushSchema(): void {
+/** Roda a CLI do Prisma na pasta do servidor, contra o banco configurado. */
+function prismaCli(args: string[]): void {
   const cli = createRequire(import.meta.url).resolve('prisma/build/index.js');
-  const result = spawnSync(process.execPath, [cli, 'db', 'push', '--skip-generate'], {
+  const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: SERVER_ROOT,
     env: { ...process.env, DATABASE_URL: config.databaseUrl },
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 60_000,
   });
-  if (result.status !== 0) throw new Error(`prisma db push falhou:\n${result.stderr}`);
+  if (result.status !== 0) {
+    throw new Error(`prisma ${args.join(' ')} falhou:\n${result.stderr}${result.stdout}`);
+  }
 }
+
+/** Desenvolvimento: cria/atualiza as tabelas direto do schema.prisma. */
+const pushSchema = (): void => prismaCli(['db', 'push', '--skip-generate']);
+
+/** Produção: aplica só as migrações versionadas (prisma/migrations), sem apagar dados. */
+const migrate = (): void => prismaCli(['migrate', 'deploy']);
 
 /** Seed idempotente: o catálogo de cosméticos (raridade e preços) e a migração das contas antigas. */
 export async function seed(prisma: PrismaClient): Promise<void> {
@@ -145,7 +153,10 @@ export async function openDatabase(): Promise<PrismaClient> {
     console.log('[banco] iniciando PostgreSQL embutido…');
     await startEmbedded(url);
   }
-  if (!config.production) {
+  if (config.production) {
+    console.log('[banco] aplicando migrações…');
+    migrate();
+  } else {
     console.log('[banco] conferindo tabelas…');
     try {
       pushSchema();

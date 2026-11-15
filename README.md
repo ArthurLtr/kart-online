@@ -45,6 +45,10 @@ Outros comandos:
 
 Controles padrão: `W`/`↑` acelera, `S`/`↓` freia e dá ré, `A` `D`/`←` `→` vira, `Espaço` drift, `Shift` olha para trás.
 
+## Colocar no ar
+
+Um contêiner só (`Dockerfile`) entrega o jogo, a API e as corridas no mesmo endereço. Precisa de PostgreSQL, `AUTH_SECRET` e, de preferência, Redis. O passo a passo está em [docs/deploy.md](docs/deploy.md).
+
 ## Arquitetura
 
 ```

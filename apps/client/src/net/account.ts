@@ -24,6 +24,7 @@ const TOKEN_KEY = 'kart-online.token';
 function apiUrl(): string {
   const configured = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (configured) return configured.replace(/^ws/, 'http');
+  if (import.meta.env.PROD) return window.location.origin;
   return `${window.location.protocol}//${window.location.hostname}:${SERVER_DEFAULT_PORT}`;
 }
 

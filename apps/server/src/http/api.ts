@@ -52,6 +52,18 @@ class RateLimiter {
 }
 
 /**
+ * Quem pode chamar a API de outro endereço. Com ALLOWED_ORIGINS, só os listados;
+ * sem ela, tudo em desenvolvimento e nada em produção (lá o jogo é servido
+ * pelo próprio servidor, no mesmo endereço, e não precisa de CORS).
+ */
+export function allowOrigin(origin: string | undefined): string | null {
+  if (config.allowedOrigins.length > 0) {
+    return origin && config.allowedOrigins.includes(origin) ? origin : null;
+  }
+  return config.production ? null : '*';
+}
+
+/**
  * API HTTP de contas, inventário e fila ranqueada. Devolve `true` se a rota
  * era dela (as demais ficam com o Colyseus).
  */
@@ -80,7 +92,12 @@ export function createApi(services: Services | null) {
       if (!id) throw new HttpError(401, 'Entre na sua conta.');
       return id;
     };
-    const address = request.socket.remoteAddress ?? '?';
+    const forwarded = config.trustProxy
+      ? String(request.headers['x-forwarded-for'] ?? '')
+          .split(',')[0]
+          ?.trim()
+      : '';
+    const address = forwarded || request.socket.remoteAddress || '?';
 
     switch (key) {
       case 'POST /api/auth/guest':
@@ -182,13 +199,15 @@ export function createApi(services: Services | null) {
     const [path = '', search = ''] = (request.url ?? '').split('?');
     const query = new URLSearchParams(search);
     if (!path.startsWith('/api/')) return false;
-    const headers = {
+    const headers: Record<string, string> = {
       'content-type': 'application/json; charset=utf-8',
-      'access-control-allow-origin': '*',
       'access-control-allow-headers': 'content-type, authorization',
       'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
       'cache-control': 'no-store',
+      vary: 'Origin',
     };
+    const origin = allowOrigin(request.headers.origin);
+    if (origin) headers['access-control-allow-origin'] = origin;
     if (request.method === 'OPTIONS') {
       response.writeHead(204, headers).end();
       return true;

@@ -7,6 +7,7 @@ import { Accounts } from './accounts/accounts.js';
 import { config } from './config.js';
 import { openDatabase } from './db/database.js';
 import { createApi } from './http/api.js';
+import { createStaticHandler } from './http/static.js';
 import type { MatchCreator, QueueStore } from './ranked/matchmaking.js';
 import { createPaymentProvider } from './payments/PaymentProvider.js';
 import { GemStore } from './payments/store.js';
@@ -97,6 +98,13 @@ await initPhysics();
 const services = await startServices();
 if (services) setServices(services);
 const api = createApi(services);
+// Em produção o mesmo processo entrega o jogo: um endereço só para página, API e WebSocket.
+const serveClient = config.clientDir ? createStaticHandler(config.clientDir) : null;
+if (serveClient) console.log(`[web] servindo o cliente de ${config.clientDir}`);
+if (config.production && !services) {
+  // Sem banco não há login, e sem login ninguém corre online: melhor cair e a hospedagem reiniciar.
+  throw new Error('Banco de dados indisponível em produção.');
+}
 
 const httpServer = createServer((request, response) => {
   if (request.url === '/health') {
@@ -104,7 +112,9 @@ const httpServer = createServer((request, response) => {
     response.end(JSON.stringify({ ok: true, accounts: services !== null }));
     return;
   }
-  api(request, response);
+  if (api(request, response)) return;
+  if (serveClient) serveClient(request, response);
+  else response.writeHead(404).end();
 });
 
 const gameServer = new Server({ server: httpServer });
@@ -112,4 +122,4 @@ const gameServer = new Server({ server: httpServer });
 gameServer.define(ROOM_NAME, RaceRoom).filterBy(['mode']);
 
 await gameServer.listen(config.port);
-console.log(`Servidor Kart Online ouvindo em ws://localhost:${config.port}`);
+console.log(`Servidor Kart Online ouvindo na porta ${config.port}`);
