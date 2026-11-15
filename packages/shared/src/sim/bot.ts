@@ -32,12 +32,16 @@ export function racingLine(track: Track, maxOffset = 3.4): Float32Array {
  * aderência na curva e, voltando de trás para a frente, onde precisa começar
  * a frear. A habilidade só muda o quanto do limite ele usa.
  */
-export function createBotPlan(track: Track, skill: number): BotPlan {
+export function createBotPlan(track: Track, skill: number, extraGrip = 0): BotPlan {
   const n = track.samples.length;
   const offset = racingLine(track);
   // Fração da aderência usada. Fica longe do limite de propósito: a folga é o que
   // perdoa o jogador que entra um pouco rápido demais na curva.
-  const use = 0.55 + 0.17 * Math.min(1, Math.max(0, skill));
+  // `extraGrip` (ataque): freia mais tarde, mas sempre abaixo do limite real (use < 1).
+  const use = Math.min(
+    0.85,
+    0.55 + 0.17 * Math.min(1, Math.max(0, skill)) + Math.max(0, extraGrip),
+  );
   const lateral = SURFACES.asphalt.grip * T.gravity * use;
   const braking = 5.4 * use;
   const top = 31;

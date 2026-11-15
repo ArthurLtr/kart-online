@@ -6,3 +6,4 @@ export * from './collisions.js';
 export * from './race.js';
 export * from './bot.js';
 export * from './assists.js';
+export * from './botBrain.js';

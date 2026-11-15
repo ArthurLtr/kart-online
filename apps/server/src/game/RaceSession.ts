@@ -1,5 +1,5 @@
 import type {
-  BotPlan,
+  BotDriver,
   Cosmetics,
   CustomPaint,
   InputMessage,
@@ -16,8 +16,8 @@ import type {
   Track,
 } from '@kart/shared';
 import {
-  botInput,
-  createBotPlan,
+  createBotContext,
+  createBotDriver,
   createRace,
   createTrackEnvironment,
   frameAt,
@@ -32,6 +32,8 @@ import {
   speedOf,
   standings,
   stepRace,
+  driveBot,
+  updateBotContext,
 } from '@kart/shared';
 
 export interface SessionOptions {
@@ -79,7 +81,10 @@ interface Seat {
   /** Limite de taxa (balde de fichas). */
   tokens: number;
   violations: number;
-  plan: BotPlan | null;
+  /** Habilidade do bot (0–1); `null` para humano. */
+  botSkill: number | null;
+  /** Piloto-bot desta corrida (criado na largada). */
+  driver: BotDriver | null;
   userId: string | null;
   /** Pontos de Ranqueado (patente no lobby); `null` para bot ou em posicionamento. */
   rating?: number | null;
@@ -117,6 +122,8 @@ const IMPOSSIBLE_SPEED = 45;
 export class RaceSession {
   phase: RoomPhase = 'lobby';
   race: RaceState | null = null;
+  /** Retrato da corrida para os bots, reaproveitado a cada tick (sem alocar). */
+  private readonly botContext = createBotContext(MAX_KARTS);
   results: ResultEntry[] | null = null;
   /** Resultado completo da última corrida, para o banco; a sala consome e zera. */
   report: MatchReportEntry[] | null = null;
@@ -190,7 +197,8 @@ export class RaceSession {
       ack: -1,
       tokens: RATE_BURST,
       violations: 0,
-      plan: null,
+      botSkill: null,
+      driver: null,
       userId,
       rating,
       laps: [],
@@ -304,7 +312,8 @@ export class RaceSession {
           ack: -1,
           tokens: 0,
           violations: 0,
-          plan: createBotPlan(this.track, skill),
+          botSkill: skill,
+          driver: null,
           userId: null,
           laps: [],
         });
@@ -321,16 +330,23 @@ export class RaceSession {
       laps: this.options.laps,
       seed: this.options.seed + this.raceCount,
     });
+    // Cada bot vira um piloto com personalidade própria (semente da corrida + vaga).
+    const raceSeed = this.options.seed + this.raceCount;
+    this.seats.forEach((seat, slot) => {
+      seat.driver =
+        seat.bot && seat.botSkill !== null && this.race
+          ? createBotDriver(this.track, this.race, slot, seat.botSkill, { seed: raceSeed })
+          : null;
+    });
     this.raceCount++;
     this.firstFinishTick = null;
     this.results = null;
     this.enter('race');
   }
 
-  private inputFor(seat: Seat, kart: KartState, race: RaceState): KartInput {
-    if (seat.bot && seat.plan) {
-      return race.tick < race.goTick ? NO_INPUT : botInput(kart, this.track, seat.plan);
-    }
+  private inputFor(seat: Seat, race: RaceState): KartInput {
+    // O bot enxerga a corrida pelo retrato montado uma vez neste tick (tickRace).
+    if (seat.bot && seat.driver) return driveBot(seat.driver, race, this.track, this.botContext);
     const next = seat.queue.shift();
     if (next) {
       seat.ack = next.seq;
@@ -347,9 +363,8 @@ export class RaceSession {
   private tickRace(): void {
     const race = this.race;
     if (!race) return;
-    const inputs = this.seats.map((seat, i) =>
-      this.inputFor(seat, race.karts[i] as KartState, race),
-    );
+    if (this.seats.some((seat) => seat.driver)) updateBotContext(this.botContext, race, this.track);
+    const inputs = this.seats.map((seat) => this.inputFor(seat, race));
     let next = stepRace(race, inputs, this.track, this.environment);
     next = this.guard(next);
     this.race = next;
@@ -421,7 +436,7 @@ export class RaceSession {
         userId: seat.userId,
         abandoned: gone(slot),
         laps: [...seat.laps],
-        botSkill: seat.bot ? (seat.plan?.skill ?? null) : null,
+        botSkill: seat.bot ? seat.botSkill : null,
         slot,
         name: seat.name,
         bot: seat.bot,
