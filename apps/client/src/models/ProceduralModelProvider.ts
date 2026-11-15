@@ -1,6 +1,6 @@
 import type { Group } from 'three';
 import type { ModelId } from '@kart/shared';
-import type { HelmetModel } from '../cosmetics/catalog';
+import { helmetMesh } from '../cosmetics/catalog';
 import { createHelmet } from './helmet/createHelmet';
 import type { ModelProvider } from './ModelProvider';
 import { createPilot } from './pilot/createPilot';
@@ -15,8 +15,8 @@ type Factory = (variant?: string) => Group;
  */
 const FACTORIES: Partial<Record<ModelId, Factory>> = {
   pilot: () => createPilot(),
-  helmet: (variant) =>
-    createHelmet(variant === 'aero' ? 'aero' : ('integral' satisfies HelmetModel['id'])),
+  // Capacete da temporada sem .glb próprio: a malha em código da mesma forma.
+  helmet: (variant) => createHelmet(helmetMesh(variant)),
 };
 
 export class ProceduralModelProvider implements ModelProvider {

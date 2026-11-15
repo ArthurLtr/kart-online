@@ -44,6 +44,8 @@ export async function createDriver(
     async setLoadout(next, nextPaint = null) {
       if (!helmet || helmet.userData.model !== next.helmetModel) {
         helmet = await models.load('helmet', next.helmetModel);
+        // O id do item (não o da malha): capacetes da temporada dividem a mesma forma.
+        helmet.userData.model = next.helmetModel;
         pilot.attachHelmet(helmet);
       }
       driver.loadout = next;

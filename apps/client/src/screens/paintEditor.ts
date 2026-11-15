@@ -1,4 +1,4 @@
-import { LIVERIES } from '../cosmetics/catalog';
+import { byRarity, LIVERIES } from '../cosmetics/catalog';
 import type { FinishId, KartPaint, PatternId, ZoneId } from '../cosmetics/paint';
 import {
   clonePaint,
@@ -61,14 +61,17 @@ export function createPaintEditor(host: PaintEditorHost): PaintEditor {
 
   // --- pinturas prontas --------------------------------------------------------
   const readyRow = el('div', 'pin-prontas');
-  const readyButtons = LIVERIES.map((item) => {
+  // Pinturas prontas em ordem de raridade; as da temporada levam o selo no nome.
+  const readyButtons = byRarity('livery', LIVERIES).map((item) => {
     const button = btn('pin-pronta', '', () => {
       host.setLivery(item.id);
       sync();
     });
     button.style.background = item.color ?? ORIGINAL_BLUE;
-    button.title = item.name;
-    button.setAttribute('aria-label', `Pintura pronta: ${item.name}`);
+    const label = item.season === 1 ? `${item.name} · Temporada 1` : item.name;
+    button.title = label;
+    button.setAttribute('aria-label', `Pintura pronta: ${label}`);
+    if (item.season === 1) button.dataset.temporada = '1';
     readyRow.append(button);
     return { id: item.id, button };
   });

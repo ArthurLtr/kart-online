@@ -641,3 +641,29 @@
 .pin-preset-usar[aria-pressed='true'] small {
   color: var(--acento);
 }
+
+/* --- Temporada 1: selo discreto nos cartões e marca nas pinturas prontas ---------- */
+.gar-selo-temporada {
+  justify-self: start;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--acento) 45%, transparent);
+  border-radius: 999px;
+  color: var(--acento);
+  font: 600 0.625rem / 1.4 var(--fonte);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pin-pronta[data-temporada='1'] {
+  position: relative;
+}
+
+.pin-pronta[data-temporada='1']::before {
+  content: 'T1';
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  color: var(--acento);
+  font: 700 0.5625rem / 1 var(--fonte);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+}

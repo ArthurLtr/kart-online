@@ -6,6 +6,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { ModelId } from '@kart/shared';
+import { HELMET_MODELS } from '../cosmetics/catalog';
+import { loadOptionalGlb } from './glb';
 import type { ModelProvider } from './ModelProvider';
 
 /** GLBs gerados por `pnpm assets` a partir da pasta referencias/. */
@@ -38,7 +40,17 @@ export class GlbModelProvider implements ModelProvider {
       .setMeshoptDecoder(MeshoptDecoder);
   }
 
-  async load(id: ModelId): Promise<Group> {
+  async load(id: ModelId, variant?: string): Promise<Group> {
+    // Capacete da temporada com .glb próprio. Sem o arquivo, o procedural assume
+    // (a mesma forma em código) e o material do item é aplicado por cima.
+    if (id === 'helmet') {
+      const url = HELMET_MODELS.find((model) => model.id === variant)?.glb;
+      const gltf = url ? await loadOptionalGlb(url) : null;
+      if (!gltf) throw new Error(`sem GLB de capacete "${variant ?? 'padrão'}"`);
+      const group = gltf.scene.clone(true);
+      group.name = 'helmet';
+      return group;
+    }
     const url = GLB_URLS[id];
     if (!url) throw new Error(`sem GLB para "${id}"`);
 

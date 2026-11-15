@@ -16,6 +16,7 @@ import {
   stickerLimit,
   STICKER_SLOTS_ITEM,
 } from './catalog.js';
+import { getCatalogItemById, SEASON_1_CATALOG, SEASON_1_STARTER_IDS } from './season1.js';
 
 describe('catálogo: raridades e preços', () => {
   it('ids únicos e no formato slot:chave', () => {
@@ -140,5 +141,47 @@ describe('posse', () => {
     expect(stickerLimit(owned)).toBe(BASE_STICKERS);
     const five = { stickers: Array.from({ length: 5 }, () => ({ shape: 'number' })) };
     expect(paintRequirements(five)).toContain(STICKER_SLOTS_ITEM);
+  });
+});
+
+describe('Temporada 1: Grid de Ignição', () => {
+  it('20 itens, 4 por categoria, uma raridade de cada', () => {
+    expect(SEASON_1_CATALOG).toHaveLength(20);
+    for (const category of ['helmet', 'wheel', 'paint', 'suit', 'trail'] as const) {
+      const items = SEASON_1_CATALOG.filter((entry) => entry.category === category);
+      expect(
+        items.map((entry) => entry.rarity),
+        category,
+      ).toEqual(['common', 'rare', 'epic', 'legendary']);
+    }
+  });
+
+  it('todos entram no catálogo de posse com o preço da tabela', () => {
+    for (const entry of SEASON_1_CATALOG) {
+      const owned = catalogItem(entry.itemId);
+      expect(owned, entry.id).toBeDefined();
+      expect(owned?.season).toBe(1);
+      expect(owned?.priceGems).toBe(entry.priceGems);
+      if (!entry.isDefault) expect(owned?.priceCoins).toBe(entry.priceCoins);
+    }
+    expect(catalogItem('helmetModel:helm_dragon_gold')?.priceGems).toBe(350);
+    expect(catalogItem('livery:kart_obsidian_gold')?.priceCoins).toBeNull();
+  });
+
+  it('kit inicial: os 5 comuns grátis são entregues a toda conta', () => {
+    expect(SEASON_1_STARTER_IDS).toEqual([
+      'helmetModel:helm_classic_red',
+      'rim:wheel_slick_5spoke',
+      'livery:kart_rookie_red',
+      'suit:suit_classic_red',
+      'trail:trail_white_smoke',
+    ]);
+    for (const id of SEASON_1_STARTER_IDS) expect(DEFAULT_ITEM_IDS).toContain(id);
+  });
+
+  it('busca pelo id oficial ou pelo id de posse', () => {
+    expect(getCatalogItemById('wheel_neon_turbine')?.priceCoins).toBe(3000);
+    expect(getCatalogItemById('rim:wheel_neon_turbine')?.id).toBe('wheel_neon_turbine');
+    expect(getCatalogItemById('nao_existe')).toBeUndefined();
   });
 });

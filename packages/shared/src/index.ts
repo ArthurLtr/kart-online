@@ -6,4 +6,5 @@ export * from './net/protocol.js';
 export * from './net/catalog.js';
 export * from './net/accounts.js';
 export * from './net/ranks.js';
+export * from './net/season1.js';
 export * from './net/progression.js';

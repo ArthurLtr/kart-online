@@ -18,7 +18,7 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { HelmetModel, HelmetPaint } from '../../cosmetics/catalog';
+import type { HelmetMesh, HelmetPaint } from '../../cosmetics/catalog';
 
 export const HELMET_PARTS = {
   shell: 'helmet_shell',
@@ -179,7 +179,7 @@ function visorGeometry(): BufferGeometry {
 }
 
 /** Borrachas, entrada de ar, pivôs da viseira e (no modelo aero) o aerofólio traseiro. */
-function trimGeometry(model: HelmetModel['id']): BufferGeometry {
+function trimGeometry(model: HelmetMesh): BufferGeometry {
   const parts: BufferGeometry[] = [];
 
   const visorRim: Vector3[] = [];
@@ -345,7 +345,7 @@ const geometryCache = new Map<
  *
  * Contrato: origem no centro da cabeça, frente para +Z, partes HELMET_PARTS.
  */
-export function createHelmet(model: HelmetModel['id'] = 'integral'): Group {
+export function createHelmet(model: HelmetMesh = 'integral'): Group {
   let geometry = geometryCache.get(model);
   if (!geometry) {
     const base = geometryCache.values().next().value;

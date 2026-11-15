@@ -113,6 +113,27 @@ export async function seed(prisma: PrismaClient): Promise<void> {
     });
   }
   await migrateLegacyAccounts(prisma);
+  await grantNewDefaults(prisma);
+}
+
+/**
+ * Item básico novo (ex.: o kit da Temporada 1) chega também a quem já tinha
+ * conta: toda conta com o kart inicial confirmado ganha os básicos que ainda
+ * não possui. Idempotente (duplicados são ignorados).
+ */
+async function grantNewDefaults(prisma: PrismaClient): Promise<void> {
+  const users = await prisma.user.findMany({
+    where: { hasCompletedOnboarding: true },
+    select: { id: true },
+  });
+  if (users.length === 0) return;
+  const { count } = await prisma.inventory.createMany({
+    data: users.flatMap((user) =>
+      DEFAULT_ITEM_IDS.map((itemId) => ({ userId: user.id, itemId, source: 'starter' })),
+    ),
+    skipDuplicates: true,
+  });
+  if (count > 0) console.log(`[banco] ${count} item(ns) básico(s) novo(s) entregue(s)`);
 }
 
 /**

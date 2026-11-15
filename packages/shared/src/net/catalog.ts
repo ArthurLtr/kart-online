@@ -1,4 +1,5 @@
 import type { Cosmetics } from './protocol.js';
+import { SEASON_1_CATALOG } from './season1.js';
 
 /**
  * Catálogo de posse: todo cosmético que existe no jogo, com raridade e preço.
@@ -40,6 +41,8 @@ export interface CatalogItem {
   isDefault: boolean;
   /** Nível de carreira exigido para comprar com moedas (0 = sem exigência). Gemas não exigem nível. */
   unlockLevel: number;
+  /** Temporada em que o item foi lançado (ausente = itens de antes das temporadas). */
+  season?: number;
 }
 
 const base = (slot: string, key: string, name: string): CatalogItem => ({
@@ -131,6 +134,20 @@ export const CATALOG_ITEMS: readonly CatalogItem[] = [
   // --- espaços extras ---
   sold('feature', 'presetSlots', 'Mais 3 visuais salvos', 'exclusive', null, 200),
   sold('feature', 'stickerSlots', 'Mais 4 camadas de adesivo', 'exclusive', null, 200),
+  // --- Temporada 1: Grid de Ignição (season1.ts) ---
+  ...SEASON_1_CATALOG.map((entry): CatalogItem => ({
+    id: entry.itemId,
+    slot: entry.slot,
+    key: entry.id,
+    name: entry.name,
+    rarity: entry.rarity,
+    // Grátis do kit inicial: não se compra (é entregue a toda conta).
+    priceCoins: entry.isDefault ? null : entry.priceCoins,
+    priceGems: entry.priceGems,
+    isDefault: entry.isDefault,
+    unlockLevel: 0,
+    season: entry.season,
+  })),
 ];
 
 const BY_ID = new Map(CATALOG_ITEMS.map((item) => [item.id, item]));

@@ -1,17 +1,41 @@
+import { catalogItem } from '@kart/shared';
+
 /**
  * Catálogo visual dos cosméticos. São só visuais: nada aqui é lido pela
  * simulação; o servidor guarda apenas os ids equipados. As cores dos macacões e capacetes seguem
  * as imagens de referencias/ (referencia piloto 1 a 6), com marcas fictícias.
  */
 
-export interface LiveryDesign {
+/**
+ * Material de um item da temporada. Também é o visual de reserva enquanto o
+ * modelo .glb próprio do item não existe: a malha padrão recebe este material.
+ */
+export interface MaterialPreset {
+  metalness?: number;
+  roughness?: number;
+  /** Brilho próprio (neon); só as partes claras da textura acendem. */
+  emissive?: string;
+  emissiveIntensity?: number;
+}
+
+/** Marca dos itens da Temporada 1 e onde fica o .glb próprio (quando houver). */
+export interface SeasonInfo {
+  season?: 1;
+  /** `public/assets/cosmetics/s1/<id>.glb`; sem o arquivo, vale a malha padrão. */
+  glb?: string;
+  preset?: MaterialPreset;
+}
+
+const S1_GLB = (id: string): string => `/assets/cosmetics/s1/${id}.glb`;
+
+export interface LiveryDesign extends SeasonInfo {
   id: string;
   name: string;
   /** Cor que substitui o azul do modelo; `null` mantém a pintura original. */
   color: string | null;
 }
 
-export interface SuitDesign {
+export interface SuitDesign extends SeasonInfo {
   id: string;
   name: string;
   base: string;
@@ -41,9 +65,16 @@ export interface BootsDesign {
   sole: string;
 }
 
-export interface HelmetModel {
-  id: 'integral' | 'aero';
+/** Formas de capacete que existem em código (malha padrão dos capacetes da temporada). */
+export type HelmetMesh = 'integral' | 'aero';
+
+export interface HelmetModel extends SeasonInfo {
+  id: string;
   name: string;
+  /** Malha usada enquanto não houver o .glb próprio. */
+  mesh: HelmetMesh;
+  /** Capacete completo da temporada: já vem com pintura e viseira próprias. */
+  look?: { paint: HelmetPaint; visor: string; visorGlow?: number };
 }
 
 export interface HelmetPaint {
@@ -61,18 +92,26 @@ export interface VisorDesign {
   color: string;
 }
 
-export interface RimDesign {
+export interface RimDesign extends SeasonInfo {
   id: string;
   name: string;
   /** Cor que tinge as rodas; `null` mantém as originais. */
   color: string | null;
 }
 
-export interface TrailDesign {
+export interface TrailDesign extends SeasonInfo {
   id: string;
   name: string;
   /** Cor da trilha luminosa; `null` = sem trilha. */
   color: string | null;
+  /** Cor na ponta da trilha (degradê); sem ela, a trilha tem uma cor só. */
+  tail?: string;
+  /** Largura relativa (1 = padrão). */
+  width?: number;
+  /** Tremulação 0–1 (fogo e eletricidade). */
+  flicker?: number;
+  /** Intensidade 0–1 (fumaça é mais suave que neon). */
+  strength?: number;
 }
 
 export const LIVERIES: readonly LiveryDesign[] = [
@@ -81,6 +120,35 @@ export const LIVERIES: readonly LiveryDesign[] = [
   { id: 'amarelo', name: 'Amarelo', color: '#f0b90f' },
   { id: 'verde', name: 'Verde', color: '#149a52' },
   { id: 'branco', name: 'Branco', color: '#e9e9e4' },
+  // --- Temporada 1 ---
+  {
+    id: 'kart_rookie_red',
+    name: 'Vermelho Grid',
+    color: '#c8102e',
+    season: 1,
+    preset: { metalness: 0.1, roughness: 0.32 },
+  },
+  {
+    id: 'kart_cobalt_checkered',
+    name: 'Azul Quadriculado',
+    color: '#1f4fd6',
+    season: 1,
+    preset: { metalness: 0.55, roughness: 0.28 },
+  },
+  {
+    id: 'kart_chameleon_cyber',
+    name: 'Camaleão Cyber',
+    color: '#7a3cff',
+    season: 1,
+    preset: { metalness: 0.6, roughness: 0.22, emissive: '#00e5ff', emissiveIntensity: 0.18 },
+  },
+  {
+    id: 'kart_obsidian_gold',
+    name: 'Obsidiana & Ouro',
+    color: '#17171a',
+    season: 1,
+    preset: { metalness: 0.9, roughness: 0.65, emissive: '#e0b23c', emissiveIntensity: 0.12 },
+  },
 ];
 
 export const SUITS: readonly SuitDesign[] = [
@@ -120,6 +188,63 @@ export const SUITS: readonly SuitDesign[] = [
     label: 'ORLA',
     labelColor: '#2e31a6',
   },
+  // --- Temporada 1 ---
+  {
+    id: 'suit_classic_red',
+    name: 'Clássico Piloto',
+    base: '#c8102e',
+    yoke: '#f2f2ee',
+    accent: '#1b1c20',
+    collar: '#c8102e',
+    belt: '#111214',
+    sleeve: '#c8102e',
+    label: 'GRID',
+    labelColor: '#ffffff',
+    season: 1,
+    preset: { roughness: 0.75 },
+  },
+  {
+    id: 'suit_pro_carbon',
+    name: 'Pro Carbono',
+    base: '#1b1c1f',
+    yoke: '#9aa3ad',
+    accent: '#c9ced6',
+    collar: '#1b1c1f',
+    belt: '#0b0b0c',
+    sleeve: '#2a2c30',
+    label: 'PRO',
+    labelColor: '#c9ced6',
+    season: 1,
+    preset: { metalness: 0.35, roughness: 0.4 },
+  },
+  {
+    id: 'suit_tech_neon',
+    name: 'Tech-Wear Neon',
+    base: '#101218',
+    yoke: '#1c2030',
+    accent: '#00e5ff',
+    collar: '#101218',
+    belt: '#00e5ff',
+    sleeve: '#101218',
+    label: 'TECH',
+    labelColor: '#00e5ff',
+    season: 1,
+    preset: { roughness: 0.55, emissive: '#00e5ff', emissiveIntensity: 0.7 },
+  },
+  {
+    id: 'suit_grand_champion',
+    name: 'Grande Campeão',
+    base: '#f4f1ea',
+    yoke: '#d4a537',
+    accent: '#e8c766',
+    collar: '#d4a537',
+    belt: '#b8892a',
+    sleeve: '#f4f1ea',
+    label: 'CAMPEÃO',
+    labelColor: '#b8892a',
+    season: 1,
+    preset: { metalness: 0.3, roughness: 0.3, emissive: '#e8c766', emissiveIntensity: 0.08 },
+  },
 ];
 
 export const GLOVES: readonly GlovesDesign[] = [
@@ -133,10 +258,74 @@ export const BOOTS: readonly BootsDesign[] = [
   { id: 'brancas', name: 'Brancas', color: '#deded9', sole: '#2a2b30' },
 ];
 
+/** Pinturas próprias dos capacetes da Temporada 1 (não aparecem na lista de pinturas). */
+const S1_HELMET_PAINT = (
+  id: string,
+  base: string,
+  stripe: string,
+  accent: string,
+  lower: string,
+): HelmetPaint => ({ id: `s1-${id}`, name: id, base, stripe, accent, lower });
+
 export const HELMET_MODELS: readonly HelmetModel[] = [
-  { id: 'integral', name: 'Integral' },
-  { id: 'aero', name: 'Integral com aerofólio' },
+  { id: 'integral', name: 'Integral', mesh: 'integral' },
+  { id: 'aero', name: 'Integral com aerofólio', mesh: 'aero' },
+  // --- Temporada 1: capacetes completos (malha, pintura e viseira) ---
+  {
+    id: 'helm_classic_red',
+    name: 'Clássico Pista',
+    mesh: 'integral',
+    season: 1,
+    glb: S1_GLB('helm_classic_red'),
+    preset: { metalness: 0.1, roughness: 0.3 },
+    look: {
+      paint: S1_HELMET_PAINT('classic', '#f2f2ee', '#d0252a', '#d0252a', '#f2f2ee'),
+      visor: '#2a2e35',
+    },
+  },
+  {
+    id: 'helm_carbon_aero',
+    name: 'Fibra Aero',
+    mesh: 'aero',
+    season: 1,
+    glb: S1_GLB('helm_carbon_aero'),
+    preset: { metalness: 0.5, roughness: 0.28 },
+    look: {
+      paint: S1_HELMET_PAINT('carbon', '#1d1f23', '#3a3e45', '#9aa3ad', '#141518'),
+      visor: '#5b2a8c',
+    },
+  },
+  {
+    id: 'helm_cyber_shark',
+    name: 'Tubarão Cyber',
+    mesh: 'aero',
+    season: 1,
+    glb: S1_GLB('helm_cyber_shark'),
+    preset: { metalness: 0.3, roughness: 0.3, emissive: '#00e5ff', emissiveIntensity: 0.55 },
+    look: {
+      paint: S1_HELMET_PAINT('shark', '#15122a', '#00e5ff', '#ff2fb1', '#0d0b1c'),
+      visor: '#00e5ff',
+      visorGlow: 0.9,
+    },
+  },
+  {
+    id: 'helm_dragon_gold',
+    name: 'Dragão Dourado',
+    mesh: 'aero',
+    season: 1,
+    glb: S1_GLB('helm_dragon_gold'),
+    preset: { metalness: 0.9, roughness: 0.22, emissive: '#e0b23c', emissiveIntensity: 0.1 },
+    look: {
+      paint: S1_HELMET_PAINT('dragon', '#d4a537', '#f6d57a', '#8a5a12', '#b7891f'),
+      visor: '#2ef2ff',
+      visorGlow: 1.2,
+    },
+  },
 ];
+
+/** Forma em código do capacete (para os da temporada, enquanto não há .glb). */
+export const helmetMesh = (id: string | undefined): HelmetMesh =>
+  HELMET_MODELS.find((model) => model.id === id)?.mesh ?? 'integral';
 
 export const HELMET_PAINTS: readonly HelmetPaint[] = [
   {
@@ -175,12 +364,81 @@ export const RIMS: readonly RimDesign[] = [
   { id: 'padrao', name: 'Originais', color: null },
   { id: 'grafite', name: 'Grafite', color: '#5b606b' },
   { id: 'dourado', name: 'Dourados', color: '#e0b23c' },
+  // --- Temporada 1 ---
+  {
+    id: 'wheel_slick_5spoke',
+    name: '5 Raios Slick',
+    color: '#8d939c',
+    season: 1,
+    glb: S1_GLB('wheel_slick_5spoke'),
+    preset: { metalness: 0.7, roughness: 0.45 },
+  },
+  {
+    id: 'wheel_chrome_sport',
+    name: 'Esportivo Cromado',
+    color: '#eef1f5',
+    season: 1,
+    glb: S1_GLB('wheel_chrome_sport'),
+    preset: { metalness: 1, roughness: 0.1, emissive: '#d0252a', emissiveIntensity: 0.05 },
+  },
+  {
+    id: 'wheel_neon_turbine',
+    name: 'Turbina Neon Ciano',
+    color: '#1b2633',
+    season: 1,
+    glb: S1_GLB('wheel_neon_turbine'),
+    preset: { metalness: 0.5, roughness: 0.3, emissive: '#00e5ff', emissiveIntensity: 1.4 },
+  },
+  {
+    id: 'wheel_forged_gold',
+    name: 'Forjada Campeão',
+    color: '#d6a531',
+    season: 1,
+    glb: S1_GLB('wheel_forged_gold'),
+    preset: { metalness: 0.95, roughness: 0.2, emissive: '#ff7a1a', emissiveIntensity: 0.3 },
+  },
 ];
 
 export const TRAILS: readonly TrailDesign[] = [
   { id: 'nenhuma', name: 'Sem trilha', color: null },
   { id: 'branca', name: 'Branca', color: '#f1f3f5' },
   { id: 'azul', name: 'Azul', color: '#3d8bff' },
+  // --- Temporada 1 ---
+  {
+    id: 'trail_white_smoke',
+    name: 'Fumaça de Pneu Padrão',
+    color: '#d9dde2',
+    tail: '#5a5f66',
+    width: 1.35,
+    strength: 0.45,
+    season: 1,
+  },
+  {
+    id: 'trail_nitro_flame',
+    name: 'Chama Dupla de Escape',
+    color: '#ff8a1e',
+    tail: '#2f6bff',
+    flicker: 0.45,
+    season: 1,
+  },
+  {
+    id: 'trail_plasma_lightning',
+    name: 'Rastro Plasma Elétrico',
+    color: '#00e5ff',
+    tail: '#7a3cff',
+    width: 0.8,
+    flicker: 0.8,
+    season: 1,
+  },
+  {
+    id: 'trail_phoenix_gold',
+    name: 'Trilha Fênix Dourada',
+    color: '#ffd76a',
+    tail: '#ff6a00',
+    width: 1.25,
+    flicker: 0.35,
+    season: 1,
+  },
 ];
 
 /** O que o jogador tem equipado. Guarda só ids do catálogo. */
@@ -197,15 +455,15 @@ export interface Loadout {
 }
 
 export const DEFAULT_LOADOUT: Loadout = {
-  livery: 'azul',
-  suit: 'orla',
-  gloves: 'azuis',
+  livery: 'kart_rookie_red',
+  suit: 'suit_classic_red',
+  gloves: 'pretas',
   boots: 'pretas',
-  helmetModel: 'integral',
+  helmetModel: 'helm_classic_red',
   helmetPaint: 'brisa',
   visor: 'fume',
-  rim: 'padrao',
-  trail: 'nenhuma',
+  rim: 'wheel_slick_5spoke',
+  trail: 'trail_white_smoke',
 };
 
 export const CATALOG = {
@@ -289,3 +547,30 @@ export function sampleLoadout(index: number): Loadout {
     trail: 'nenhuma',
   };
 }
+
+const RARITY_ORDER: Record<string, number> = {
+  common: 0,
+  rare: 1,
+  epic: 2,
+  legendary: 3,
+  exclusive: 4,
+};
+
+/**
+ * Itens de um slot em ordem crescente de raridade (comum → lendário); dentro
+ * da mesma raridade, a ordem do catálogo. A raridade vem do catálogo de posse.
+ */
+export function byRarity<T extends { id: string }>(slot: keyof Loadout, items: readonly T[]): T[] {
+  const rank = (item: T): number =>
+    RARITY_ORDER[catalogItem(`${slot}:${item.id}`)?.rarity ?? 'common'] ?? 0;
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+/** Item lançado na Temporada 1 (selo nos cartões da Garagem). */
+export const isSeason1 = (slot: keyof Loadout, id: string): boolean =>
+  (CATALOG[slot] as readonly (SeasonInfo & { id: string })[]).some(
+    (item) => item.id === id && item.season === 1,
+  );

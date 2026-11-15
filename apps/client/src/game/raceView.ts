@@ -120,8 +120,10 @@ export class RaceView {
         driver.kart.rotation.y = slot.heading;
       }
       this.scene.add(driver.kart, effects.group);
-      const trailColor = findDesign('trail', loadouts[i]?.trail ?? '').color;
-      const trail = trailColor ? new Trail(trailColor) : null;
+      const trailDesign = findDesign('trail', loadouts[i]?.trail ?? '');
+      const trail = trailDesign.color
+        ? new Trail({ ...trailDesign, color: trailDesign.color })
+        : null;
       if (trail) this.scene.add(trail.mesh);
       return { driver, effects, trail };
     });

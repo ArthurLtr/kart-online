@@ -8,6 +8,9 @@ import { suitTextures } from '../models/pilot/suitTextures';
 import type { Loadout } from './catalog';
 import { findDesign } from './catalog';
 import { paintKart } from './kartPaint';
+import type { MaterialPreset } from './catalog';
+import { applyMaterialPreset } from './materialPreset';
+import { applyWheelModel } from './wheelModel';
 import type { KartPaint } from './paint';
 
 const KART_PART_NAMES = new Set<string>(Object.values(KART_PARTS));
@@ -57,6 +60,7 @@ function applyLivery(
   color: string | null,
   custom: KartPaint | null,
   rimColor: string | null,
+  preset: MaterialPreset | undefined,
 ): void {
   // Os karts clonados dividem um material; cada kart ganha o seu na primeira troca.
   let paint = kart.userData.paintMaterial as MeshStandardMaterial | undefined;
@@ -77,6 +81,8 @@ function applyLivery(
   paint.map = color ? recolorLivery(original, color) : original;
   // A pintura livre, quando existe, vale no lugar da pintura pronta do catálogo.
   paintKart(kart, paint, original, custom, rimColor);
+  // Material da pintura da temporada (a pintura livre tem acabamento próprio por zona).
+  applyMaterialPreset(paint, custom ? undefined : preset);
   paint.needsUpdate = true;
 }
 
@@ -92,7 +98,7 @@ const WHEEL_PARTS = new Set<string>([
  * textura e continua preto; só o aro (claro) pega a cor. Com pintura livre a
  * cor do aro já vem pintada na textura, então o material não tinge nada.
  */
-function applyRims(kart: Group, color: string | null): void {
+function applyRims(kart: Group, color: string | null, preset?: MaterialPreset): void {
   const paint = kart.userData.paintMaterial as MeshStandardMaterial | undefined;
   if (!paint) return;
   let wheels = kart.userData.wheelMaterial as MeshStandardMaterial | undefined;
@@ -110,6 +116,7 @@ function applyRims(kart: Group, color: string | null): void {
   wheels.metalnessMap = paint.metalnessMap;
   wheels.aoMap = paint.aoMap;
   wheels.color.set(color ?? '#ffffff');
+  applyMaterialPreset(wheels, preset);
   wheels.needsUpdate = true;
 }
 
@@ -117,6 +124,12 @@ function materialOf<T extends Material>(root: Group, part: string): T {
   const node = root.getObjectByName(part);
   if (!(node instanceof Mesh)) throw new Error(`parte "${part}" não encontrada`);
   return node.material as T;
+}
+
+/** Parte que pode faltar (ex.: capacete .glb da temporada com outras peças). */
+function optionalMaterial<T extends Material>(root: Group, part: string): T | null {
+  const node = root.getObjectByName(part);
+  return node instanceof Mesh ? (node.material as T) : null;
 }
 
 export interface Dressable {
@@ -137,17 +150,23 @@ export function applyLoadout(
   paint: KartPaint | null = null,
 ): void {
   if (target.kart) {
-    const rim = findDesign('rim', loadout.rim).color;
-    applyLivery(target.kart, findDesign('livery', loadout.livery).color, paint, rim);
-    applyRims(target.kart, paint ? null : rim);
+    const rimDesign = findDesign('rim', loadout.rim);
+    const livery = findDesign('livery', loadout.livery);
+    const rim = rimDesign.color;
+    applyLivery(target.kart, livery.color, paint, rim, livery.preset);
+    applyRims(target.kart, paint ? null : rim, paint ? undefined : rimDesign.preset);
+    // Roda com .glb próprio da temporada (sem o arquivo, ficam as rodas do kart).
+    void applyWheelModel(target.kart, rimDesign);
   }
 
   if (target.pilot) {
     const root = target.pilot.root;
-    const textures = suitTextures(findDesign('suit', loadout.suit));
+    const suit = findDesign('suit', loadout.suit);
+    const textures = suitTextures(suit);
     const set = (part: string, map: Texture): void => {
       const material = materialOf<MeshStandardMaterial>(root, part);
       material.map = map;
+      applyMaterialPreset(material, suit.preset);
       material.needsUpdate = true;
     };
     set(PILOT_PARTS.torso, textures.torso);
@@ -162,11 +181,24 @@ export function applyLoadout(
   }
 
   if (target.helmet) {
-    const shell = materialOf<MeshStandardMaterial>(target.helmet, HELMET_PARTS.shell);
-    shell.map = helmetPaintTexture(findDesign('helmetPaint', loadout.helmetPaint));
-    shell.needsUpdate = true;
-    materialOf<MeshStandardMaterial>(target.helmet, HELMET_PARTS.visor).color.set(
-      findDesign('visor', loadout.visor).color,
-    );
+    // Capacete da temporada vem completo: pintura e viseira próprias valem
+    // no lugar das escolhidas nos slots de pintura e viseira.
+    const model = findDesign('helmetModel', loadout.helmetModel);
+    const look = model.look;
+    const shell = optionalMaterial<MeshStandardMaterial>(target.helmet, HELMET_PARTS.shell);
+    if (shell) {
+      shell.map = helmetPaintTexture(look?.paint ?? findDesign('helmetPaint', loadout.helmetPaint));
+      applyMaterialPreset(shell, model.preset);
+      shell.needsUpdate = true;
+    }
+    const visor = optionalMaterial<MeshStandardMaterial>(target.helmet, HELMET_PARTS.visor);
+    if (visor) {
+      const color = look?.visor ?? findDesign('visor', loadout.visor).color;
+      visor.color.set(color);
+      applyMaterialPreset(
+        visor,
+        look?.visorGlow ? { emissive: color, emissiveIntensity: look.visorGlow } : undefined,
+      );
+    }
   }
 }

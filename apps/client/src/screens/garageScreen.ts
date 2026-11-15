@@ -2,7 +2,15 @@ import { Color, Group, PerspectiveCamera, PMREMGenerator, Scene, Vector3 } from 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Loadout } from '../cosmetics/catalog';
-import { CATALOG, findDesign, loadLoadout, saveLoadout, SLOT_LABELS } from '../cosmetics/catalog';
+import {
+  byRarity,
+  CATALOG,
+  findDesign,
+  isSeason1,
+  loadLoadout,
+  saveLoadout,
+  SLOT_LABELS,
+} from '../cosmetics/catalog';
 import { applyLoadout } from '../cosmetics/apply';
 import type { KartPaint, StickerSurface, ZoneId } from '../cosmetics/paint';
 import { loadPaint, ORIGINAL_BLUE, samePaint, savePaint, solidPaint } from '../cosmetics/paint';
@@ -195,8 +203,13 @@ export function swatchColors(slot: Slot, id: string): string[] {
     case 'visor':
       return [findDesign('visor', id).color];
     case 'trail': {
-      const color = findDesign('trail', id).color;
-      return color ? [color] : [];
+      const trail = findDesign('trail', id);
+      if (!trail.color) return [];
+      return trail.tail ? [trail.color, trail.tail] : [trail.color];
+    }
+    case 'helmetModel': {
+      const look = findDesign('helmetModel', id).look;
+      return look ? [look.paint.base, look.paint.stripe, look.visor] : [];
     }
     default:
       return [];
@@ -450,7 +463,13 @@ export function createGarageScreen(context: AppContext): GameScreen {
     refreshEditors();
     const items = painting
       ? []
-      : (CATALOG[category.slot] as readonly { id: string; name: string }[]);
+      : byRarity(category.slot, CATALOG[category.slot] as readonly { id: string; name: string }[]);
+    // Capacete da temporada já vem com pintura e viseira: avisa nas abas delas.
+    const fullHelmet =
+      (category.slot === 'helmetPaint' || category.slot === 'visor') &&
+      findDesign('helmetModel', preview.helmetModel).look
+        ? findDesign('helmetModel', preview.helmetModel).name
+        : null;
     const position = CATEGORIES.indexOf(category) + 1;
     heading.replaceChildren(
       element('p', 'sobretitulo', `${category.group} · ${String(position).padStart(2, '0')}`),
@@ -466,7 +485,9 @@ export function createGarageScreen(context: AppContext): GameScreen {
               ? 'Cor livre, acabamento e padrão por zona'
               : wheels
                 ? 'Aros prontos, ou cor livre e faixa no pneu'
-                : `${items.length} ${items.length === 1 ? 'opção' : 'opções'}`,
+                : fullHelmet
+                  ? `O capacete ${fullHelmet} já vem com pintura e viseira próprias`
+                  : `${items.length} ${items.length === 1 ? 'opção' : 'opções'}`,
       ),
     );
     itemButtons = new Map();
@@ -489,11 +510,11 @@ export function createGarageScreen(context: AppContext): GameScreen {
         const id = `${category.slot}:${item.id}`;
         card.dataset.item = id;
         card.dataset.raridade = catalogItem(id)?.rarity ?? 'common';
-        card.append(
-          swatch,
-          element('span', 'gar-item-nome', item.name),
-          element('span', 'gar-item-estado'),
-        );
+        card.append(swatch, element('span', 'gar-item-nome', item.name));
+        if (isSeason1(category.slot, item.id)) {
+          card.append(element('span', 'gar-selo-temporada', 'Temporada 1'));
+        }
+        card.append(element('span', 'gar-item-estado'));
         itemButtons.set(item.id, card);
         return card;
       }),

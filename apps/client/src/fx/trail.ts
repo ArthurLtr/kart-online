@@ -25,6 +25,15 @@ interface TrailPoint {
   strength: number;
 }
 
+/** Aparência da trilha: cor na frente, cor na ponta, largura, intensidade e tremulação. */
+export interface TrailStyle {
+  color: string;
+  tail?: string;
+  width?: number;
+  strength?: number;
+  flicker?: number;
+}
+
 /**
  * Trilha luminosa atrás do kart (cosmético "trilha"). É só uma fita desenhada
  * pelo cliente a partir da posição do kart: não existe na simulação.
@@ -35,9 +44,18 @@ export class Trail {
   private readonly positions = new Float32Array(POINTS * 2 * 3);
   private readonly colors = new Float32Array(POINTS * 2 * 3);
   private readonly color: Color;
+  private readonly tail: Color;
+  private readonly width: number;
+  private readonly strength: number;
+  private readonly flicker: number;
 
-  constructor(hex: string) {
-    this.color = new Color(hex);
+  constructor(style: string | TrailStyle) {
+    const look = typeof style === 'string' ? { color: style } : style;
+    this.color = new Color(look.color);
+    this.tail = new Color(look.tail ?? look.color);
+    this.width = look.width ?? 1;
+    this.strength = look.strength ?? 1;
+    this.flicker = look.flicker ?? 0;
     const geometry = new BufferGeometry();
     const position = new BufferAttribute(this.positions, 3);
     const color = new BufferAttribute(this.colors, 3);
@@ -90,20 +108,25 @@ export class Trail {
     this.mesh.visible = chain.length > 2 && chain.some((point) => point.strength > 0);
     if (!this.mesh.visible) return;
 
+    const mix = new Color();
     for (let i = 0; i < POINTS; i++) {
       const point = chain[Math.min(i, chain.length - 1)] as TrailPoint;
+      const along = i / (POINTS - 1);
+      // Fogo e eletricidade tremulam: cada ponto pisca um pouco a cada quadro.
+      const shimmer = this.flicker > 0 ? 1 - this.flicker * Math.random() * 0.7 : 1;
       // Some do meio para a ponta e afina.
-      const fade = (1 - i / (POINTS - 1)) ** 1.6 * point.strength * 0.55;
-      const half = HALF_WIDTH * (1 - (i / (POINTS - 1)) * 0.5);
+      const fade = (1 - along) ** 1.6 * point.strength * 0.55 * this.strength * shimmer;
+      const half = HALF_WIDTH * this.width * (1 - along * 0.5);
+      mix.copy(this.color).lerp(this.tail, along);
       for (let side = 0; side < 2; side++) {
         const sign = side === 0 ? 1 : -1;
         const o = (i * 2 + side) * 3;
         this.positions[o] = point.x + point.lx * half * sign;
         this.positions[o + 1] = point.y;
         this.positions[o + 2] = point.z + point.lz * half * sign;
-        this.colors[o] = this.color.r * fade;
-        this.colors[o + 1] = this.color.g * fade;
-        this.colors[o + 2] = this.color.b * fade;
+        this.colors[o] = mix.r * fade;
+        this.colors[o + 1] = mix.g * fade;
+        this.colors[o + 2] = mix.b * fade;
       }
     }
     (this.mesh.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;

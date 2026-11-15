@@ -19,3 +19,21 @@ export function loadGlb(url: string): Promise<GLTF> {
   }
   return pending;
 }
+
+/** Arquivos opcionais que já falharam nesta sessão: não pede de novo a cada troca. */
+const missing = new Set<string>();
+
+/**
+ * GLB que pode ainda não existir (ex.: modelo próprio de um cosmético da
+ * temporada, exportado do Blender aos poucos). Sem o arquivo, devolve `null`
+ * sem erro, e quem chamou usa a malha padrão.
+ */
+export async function loadOptionalGlb(url: string): Promise<GLTF | null> {
+  if (missing.has(url)) return null;
+  try {
+    return await loadGlb(url);
+  } catch {
+    missing.add(url);
+    return null;
+  }
+}
