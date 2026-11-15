@@ -16,6 +16,7 @@ import { MeshoptEncoder } from 'meshoptimizer';
 import sharp from 'sharp';
 import { convertCurrency } from './currency.mjs';
 import { convertRanks } from './ranks.mjs';
+import { convertIcons } from './icons.mjs';
 
 const KART_LENGTH_M = 1.85; // igual a KART_LENGTH_M em @kart/shared
 const TEXTURE_SIZE = 2048;
@@ -237,6 +238,7 @@ const STEPS = {
   trees: convertTrees,
   currency: () => convertCurrency(refs, join(root, 'apps/client/public/assets')),
   ranks: () => convertRanks(refs, join(root, 'apps/client/public/assets')),
+  icons: () => convertIcons(join(root, 'apps/client/public')),
 };
 const wanted = process.argv.slice(2);
 for (const [name, step] of Object.entries(STEPS)) {

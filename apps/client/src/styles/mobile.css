@@ -607,3 +607,83 @@ html.toque .hud-tempo {
 html.toque body:is([data-tela='treino'], [data-tela='corrida']) .rodape {
   visibility: hidden;
 }
+
+/* --- PWA: gestos do navegador e áreas seguras ----------------------------------- */
+
+/* Nada de "puxar para recarregar", rolagem elástica nem zoom por toque duplo. */
+html,
+body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+/* Notch e câmera nas laterais: HUD e painéis nunca ficam atrás deles. */
+html.toque #ui {
+  padding-left: max(var(--margem), env(safe-area-inset-left));
+  padding-right: max(var(--margem), env(safe-area-inset-right));
+  padding-bottom: max(var(--e2), env(safe-area-inset-bottom));
+}
+
+/* Convite de instalação: discreto, só na tela de entrada e no menu. */
+.pwa-convite {
+  position: fixed;
+  right: max(var(--e4), env(safe-area-inset-right));
+  bottom: max(var(--e4), env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--e3);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: var(--e2) var(--e2) var(--e2) var(--e4);
+  border: 1px solid var(--linha-forte);
+  border-left: 3px solid var(--acento);
+  border-radius: var(--raio-g);
+  background: var(--superficie-solida);
+  box-shadow: var(--sombra);
+  color: var(--texto);
+  font-size: var(--t-s);
+  animation: entrar var(--medio) var(--curva) backwards;
+}
+
+.pwa-convite[hidden],
+body:not([data-tela='entrar'], [data-tela='menu']) .pwa-convite {
+  display: none;
+}
+
+.pwa-convite p {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.pwa-convite button {
+  flex: none;
+  min-height: 40px;
+  padding: var(--e2) var(--e3);
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio);
+  background: var(--superficie-3);
+  color: var(--texto);
+  font: 600 var(--t-s) / 1 var(--fonte);
+  cursor: pointer;
+}
+
+.pwa-convite button.primario {
+  border-color: var(--acento);
+  background: var(--acento);
+  color: var(--acento-tinta);
+}
+
+.pwa-convite button[hidden] {
+  display: none;
+}
+
+.pwa-fechar {
+  min-width: 40px;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .pwa-convite {
+    max-width: min(360px, 46vw);
+    font-size: var(--t-xs);
+  }
+}

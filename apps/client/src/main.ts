@@ -27,6 +27,7 @@ import {
   suggestQuality,
   updateSettings,
 } from './settings';
+import { setupPwa } from './pwa/PwaManager';
 import { isTouchDevice, setupMobile } from './ui/mobile';
 import { setHints, updatePilot } from './ui/shell';
 
@@ -48,6 +49,7 @@ const ui = document.querySelector<HTMLElement>('#tela-ui');
 if (!canvas || !status || !ui) throw new Error('index.html sem #cena, #status ou #tela-ui');
 
 setupMobile();
+setupPwa();
 const renderer = createRenderer(canvas);
 if (isFirstRun()) {
   // Primeira visita: começa no preset sugerido para a placa de vídeo (sem gravar a escolha).

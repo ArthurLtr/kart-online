@@ -1,6 +1,8 @@
 import { MenuMusic } from '../audio/menuMusic';
 import { currentAccount, refreshAccount } from '../net/account';
 import { createRankHighlight } from '../ui/RankBadge';
+import { fullscreenForRace } from '../pwa/PwaManager';
+import { isTouchDevice } from '../ui/mobile';
 import { setHints, updatePilot } from '../ui/shell';
 import { createShowroom } from './showroom';
 import type { AppContext, GameScreen } from './types';
@@ -95,6 +97,8 @@ export function createMenuScreen(context: AppContext): GameScreen {
 
   let selected = -1;
   const start = (mode: Mode): void => {
+    // No celular, o toque em "Correr" já pede tela cheia deitada.
+    if (isTouchDevice()) fullscreenForRace();
     intent = mode.intent;
     window.location.hash = mode.hash;
   };

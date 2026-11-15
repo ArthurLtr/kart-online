@@ -25,6 +25,9 @@ const TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+/** Nome com o hash de conteúdo do Vite (ex.: index-B1x9_kQz.js). */
+const HASHED_NAME = /-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/;
+
 /**
  * Entrega o cliente compilado (apps/client/dist). Arquivos com hash no nome
  * (pasta assets/ do Vite) ficam em cache por um ano; o resto, sempre
@@ -38,7 +41,8 @@ export function createStaticHandler(dir: string) {
 
   const send = (request: IncomingMessage, response: ServerResponse, file: string): void => {
     const size = statSync(file).size;
-    const hashed = file.startsWith(join(root, 'assets') + sep);
+    // Só arquivos do Vite com hash no nome; as artes de public/assets mudam sem trocar de nome.
+    const hashed = file.startsWith(join(root, 'assets') + sep) && HASHED_NAME.test(file);
     response.writeHead(200, {
       'content-type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
       'content-length': size,
